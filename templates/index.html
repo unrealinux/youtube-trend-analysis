@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube 数据分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f0f; color: #fff; min-height: 100vh; transition: background 0.3s, color 0.3s; }
+        body.light { background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; padding: 30px 0 20px; font-size: 28px; }
+        h1 span { color: #ff0000; }
+        .theme-toggle { position: fixed; top: 20px; right: 20px; z-index: 100; background: #2a2a2a; border: none; color: #fff; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        body.light .theme-toggle { background: #e0e0e0; color: #333; }
+        .search-panel { background: #1a1a1a; border-radius: 12px; padding: 24px; margin-bottom: 24px; transition: background 0.3s; }
+        body.light .search-panel { background: #fff; border: 1px solid #e0e0e0; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; background: #2a2a2a; border: none; color: #aaa; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        .tab.active { background: #ff0000; color: #fff; }
+        body.light .tab { background: #f0f0f0; color: #666; }
+        body.light .tab.active { background: #ff0000; color: #fff; }
+        .tab:hover:not(.active) { background: #333; }
+        body.light .tab:hover:not(.active) { background: #e0e0e0; }
+        .form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+        .input-group { flex: 1; min-width: 200px; }
+        label { display: block; font-size: 12px; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        input, select { width: 100%; padding: 12px 16px; background: #2a2a2a; border: 1px solid #333; color: #fff; border-radius: 8px; font-size: 14px; }
+        body.light input, body.light select { background: #f5f5f5; border-color: #ddd; color: #333; }
+        input:focus, select:focus { outline: none; border-color: #ff0000; }
+        input::placeholder { color: #666; }
+        .btn-search { padding: 12px 32px; background: #ff0000; border: none; color: #fff; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background 0.2s; }
+        .btn-search:hover { background: #cc0000; }
+        .btn-search:disabled { background: #666; cursor: not-allowed; }
+        .history-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid #333; }
+        body.light .history-section { border-color: #e0e0e0; }
+        .history-label { font-size: 12px; color: #666; margin-bottom: 8px; }
+        .history-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+        .history-tag { background: #2a2a2a; color: #aaa; padding: 4px 12px; border-radius: 12px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+        body.light .history-tag { background: #f0f0f0; color: #666; }
+        .history-tag:hover { background: #ff0000; color: #fff; }
+        .history-clear { background: none; border: none; color: #666; font-size: 12px; cursor: pointer; margin-left: auto; }
+        .history-clear:hover { color: #ff0000; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: #1a1a1a; border-radius: 12px; padding: 20px; text-align: center; transition: background 0.3s; }
+        body.light .stat-card { background: #fff; border: 1px solid #e0e0e0; }
+        .stat-value { font-size: 32px; font-weight: bold; color: #ff0000; }
+        .stat-label { font-size: 12px; color: #888; margin-top: 8px; text-transform: uppercase; }
+        .chart-section { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px; }
+        @media (max-width: 768px) { .chart-section { grid-template-columns: 1fr; } }
+        .chart-card { background: #1a1a1a; border-radius: 12px; padding: 20px; transition: background 0.3s; }
+        body.light .chart-card { background: #fff; border: 1px solid #e0e0e0; }
+        .chart-card h3 { margin-bottom: 16px; font-size: 16px; color: #ccc; }
+        body.light .chart-card h3 { color: #333; }
+        .chart-container { position: relative; height: 300px; }
+        .tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; }
+        .tag { background: #2a2a2a; color: #ccc; padding: 6px 14px; border-radius: 20px; font-size: 13px; transition: all 0.2s; }
+        body.light .tag { background: #f0f0f0; color: #666; }
+        .tag:hover { background: #ff0000; color: #fff; }
+        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .video-card { background: #1a1a1a; border-radius: 12px; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; text-decoration: none; color: inherit; display: block; }
+        body.light .video-card { background: #fff; border: 1px solid #e0e0e0; }
+        .video-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(255,0,0,0.2); }
+        .video-thumb { position: relative; padding-top: 56.25%; }
+        .video-thumb img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .video-info { padding: 12px; }
+        .video-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .video-channel { font-size: 12px; color: #888; margin-bottom: 8px; }
+        .video-stats { display: flex; gap: 16px; font-size: 12px; color: #aaa; }
+        .video-stats span { display: flex; align-items: center; gap: 4px; }
+        .toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+        .btn-tool { padding: 8px 16px; background: #2a2a2a; border: none; color: #ccc; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        body.light .btn-tool { background: #f0f0f0; color: #666; }
+        .btn-tool:hover { background: #ff0000; color: #fff; }
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .loading::after { content: ''; animation: dots 1.5s infinite; }
+        @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+        .empty { text-align: center; padding: 60px 20px; color: #666; }
+        .empty-icon { font-size: 48px; margin-bottom: 16px; }
+        .hidden { display: none; }
+        /* New styles for comparison and history dashboard */
+        .comparison-panel { background: #1a1a1a; border-radius: 12px; padding: 24px; margin-bottom: 24px; transition: background 0.3s; }
+        body.light .comparison-panel { background: #fff; border: 1px solid #e0e0e0; }
+        .history-dashboard { background: #1a1a1a; border-radius: 12px; padding: 24px; margin-bottom: 24px; transition: background 0.3s; }
+        body.light .history-dashboard { background: #fff; border: 1px solid #e0e0e0; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #2a2a2a; border-radius: 8px; margin-bottom: 8px; }
+        body.light .history-item { background: #f5f5f5; }
+        .history-item:hover { background: #333; }
+        body.light .history-item:hover { background: #e0e0e0; }
+        .comparison-result { background: #1a1a1a; border-radius: 12px; padding: 24px; margin-top: 24px; transition: background 0.3s; }
+        body.light .comparison-result { background: #fff; border: 1px solid #e0e0e0; }
+        .quota-bar { height: 8px; background: #2a2a2a; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+        body.light .quota-bar { background: #e0e0e0; }
+        .quota-fill { height: 100%; background: #ff0000; transition: width 0.3s; }
+        .quota-fill.warning { background: #ff6b6b; }
+        .quota-fill.danger { background: #dc2626; }
+        .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
+        .alert-warning { background: #fef3c7; color: #92400e; }
+        body.light .alert-warning { background: #fef3c7; }
+        .alert-error { background: #fee2e2; color: #991b1b; }
+        body.light .alert-error { background: #fee2e2; }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙 主题</button>
+    <div class="container">
+        <h1>📊 YouTube <span>数据分析</span></h1>
+        <div class="search-panel">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('keywords')">关键词搜索</button>
+                <button class="tab" onclick="switchTab('channel')">频道分析</button>
+                <button class="tab" onclick="switchTab('compare')">对比分析</button>
+            <div id="keywords-panel">
+                <div class="form-row">
+                    <div class="input-group" style="flex: 2;">
+                        <label>搜索关键词</label>
+                        <input type="text" id="keywords" placeholder="例如: AI, Python教程, 科技新闻">
+                    </div>
+                    <div class="input-group">
+                        <label>时间范围</label>
+                        <select id="time-range">
+                            <option value="today">今天</option>
+                            <option value="this_week">本周</option>
+                            <option value="this_month" selected>本月</option>
+                            <option value="past_year">过去一年</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="input-group">
+                        <label>排序方式</label>
+                        <select id="sort-order">
+                            <option value="relevance">相关性</option>
+                            <option value="date">发布时间</option>
+                            <option value="viewCount" selected>播放量</option>
+                            <option value="rating">评分</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>结果数量</label>
+                        <select id="max-results">
+                            <option value="10">10</option>
+                            <option value="20" selected>20</option>
+                            <option value="30">30</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <div class="input-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;">
+                        <button class="btn-search" onclick="searchTrends()">🔍 搜索</button>
+                    </div>
+                </div>
+                <div class="history-section" id="history-section" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="history-label">最近搜索</span>
+                        <button class="history-clear" onclick="clearHistory()">清除历史</button>
+                    </div>
+                    <div class="history-tags" id="history-tags"></div>
+                </div>
+            </div>
+            <div id="channel-panel" class="hidden">
+                <div class="form-row">
+                    <div class="input-group" style="flex: 2;">
+                        <label>频道 ID 或 URL</label>
+                        <input type="text" id="channel-input" placeholder="例如: UCXuqS4H64fpLVoXrLhKyQQg 或 https://youtube.com/channel/UC...">
+                    </div>
+                    <div class="input-group">
+                        <label>时间范围</label>
+                        <select id="channel-time-range">
+                            <option value="past_year" selected>过去一年</option>
+                            <option value="past_month">本月</option>
+                            <option value="this_week">本周</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>排序方式</label>
+                        <select id="channel-sort">
+                            <option value="date" selected>发布时间</option>
+                            <option value="viewCount">播放量</option>
+                            <option value="rating">评分</option>
+                        </select>
+                    </div>
+                    <div class="input-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;">
+                        <button class="btn-search" onclick="searchChannel()">📊 分析</button>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
+        <div id="compare-panel" class="hidden">
+            <div class="form-row">
+                <div class="input-group">
+                    <label>搜索关键词 1</label>
+                    <input type="text" id="compare-query1" placeholder="例如: AI">
+                </div>
+                <div class="input-group">
+                    <label>搜索关键词 2</label>
+                    <input type="text" id="compare-query2" placeholder="例如: Python教程">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="input-group" style="flex: 0 0 auto;">
+                    <button class="btn-search" onclick="compareSearches()">📊 对比分析</button>
+                </div>
+            </div>
+        </div>
+        </div>
+        </div>
+        <div id="loading" class="loading hidden">正在分析<span></span></div>
+        <div id="results" class="hidden">
+            <div class="toolbar">
+                <button class="btn-tool" onclick="copyResults()">📋 复制结果</button>
+                <button class="btn-tool" onclick="exportJSON()">💾 导出 JSON</button>
+                <button class="btn-tool" onclick="exportCSV()">📊 导出 CSV</button>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value" id="stat-videos">-</div><div class="stat-label">视频总数</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-views">-</div><div class="stat-label">平均播放量</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-likes">-</div><div class="stat-label">平均点赞数</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-comments">-</div><div class="stat-label">平均评论数</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-freq">-</div><div class="stat-label">月均发布</div></div>
+            </div>
+            <div class="chart-section">
+                <div class="chart-card"><h3>📈 播放量趋势</h3><div class="chart-container"><canvas id="views-chart"></canvas></div></div>
+                <div class="chart-card"><h3>🏷️ 热门标签</h3><div class="tag-cloud" id="tags-cloud"></div></div>
+            </div>
+            <div class="chart-section">
+                <div class="chart-card"><h3>💬 互动率分布</h3><div class="chart-container"><canvas id="engagement-chart"></canvas></div></div>
+                <div class="chart-card"><h3>📊 数据对比</h3><div class="chart-container"><canvas id="compare-chart"></canvas></div></div>
+            </div>
+            <h2 style="margin: 24px 0 16px; font-size: 18px;">🎬 热门视频</h2>
+            <div class="video-grid" id="video-grid"></div>
+        </div>
+        <div id="empty" class="empty">
+            <div class="empty-icon">📺</div>
+            <p>输入关键词或频道 ID 开始分析</p>
+        </div>
+    </div>
+        <div id="comparison-result" class="comparison-result hidden">
+            <h3 style="margin-bottom: 16px;">📊 对比结果</h3>
+            <div id="comparison-content"></div>
+        </div>
+    <script>
+        let viewsChart = null, engagementChart = null, compareChart = null, currentData = null;
+        function toggleTheme() {
+            document.body.classList.toggle('light');
+            const isLight = document.body.classList.contains('light');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            document.querySelector('.theme-toggle').textContent = isLight ? '☀️ 主题' : '🌙 主题';
+        }
+        (function() {
+            const t = localStorage.getItem('theme');
+            if (t === 'light') { document.body.classList.add('light'); document.querySelector('.theme-toggle').textContent = '☀️ 主题'; }
+        })();
+        function loadHistory() {
+            const history = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+            const section = document.getElementById('history-section');
+            const tags = document.getElementById('history-tags');
+            if (!history.length) { section.style.display = 'none'; return; }
+            section.style.display = 'block';
+            tags.innerHTML = history.slice(-5).reverse().map(h => `<span class="history-tag" onclick="useHistory('${h.replace(/'/g, "\\'")}')">${h}</span>`).join('');
+        }
+        function saveHistory(query) {
+            let h = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+            h = h.filter(x => x !== query); h.unshift(query);
+            if (h.length > 10) h.pop();
+            localStorage.setItem('searchHistory', JSON.stringify(h)); loadHistory();
+        }
+        function useHistory(q) { document.getElementById('keywords').value = q; searchTrends(); }
+        function clearHistory() { localStorage.removeItem('searchHistory'); loadHistory(); }
+        loadHistory();
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('keywords-panel').classList.toggle('hidden', tab !== 'keywords');
+            document.getElementById('channel-panel').classList.toggle('hidden', tab !== 'channel');
+        }
+        function formatNumber(num) {
+            if (!num) return '0';
+            if (num >= 100000000) return (num / 100000000).toFixed(1) + '亿';
+            if (num >= 10000) return (num / 10000).toFixed(1) + '万';
+            return num.toLocaleString();
+        }
+        function formatDate(d) {
+            if (!d) return '';
+            const diff = (Date.now() - new Date(d).getTime()) / 1000;
+            if (diff < 60) return '刚刚'; if (diff < 3600) return Math.floor(diff/60)+'分钟前';
+            if (diff < 86400) return Math.floor(diff/3600)+'小时前';
+            if (diff < 2592000) return Math.floor(diff/86400)+'天前';
+            return new Date(d).toLocaleDateString('zh-CN');
+        }
+        async function fetchTrends(endpoint, params) {
+            const loading = document.getElementById('loading'), results = document.getElementById('results'), empty = document.getElementById('empty');
+            loading.classList.remove('hidden'); results.classList.add('hidden'); empty.classList.add('hidden');
+            try {
+                const resp = await fetch(`${endpoint}?${new URLSearchParams(params)}`);
+                if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }
+                currentData = await resp.json(); renderResults(currentData);
+                const url = new URL(window.location.href); url.searchParams.set('keywords', params.keywords?.join(',') || '');
+                window.history.replaceState({}, '', url);
+            } catch (e) { alert('获取数据失败: ' + e.message); empty.classList.remove('hidden'); }
+            finally { loading.classList.add('hidden'); }
+        }
+        async function searchTrends() {
+            const kw = document.getElementById('keywords').value.trim();
+            if (!kw) { alert('请输入关键词'); return; }
+            saveHistory(kw);
+            await fetchTrends('/api/trends/search', { keywords: kw.split(',').map(k=>k.trim()), max_results: document.getElementById('max-results').value, order: document.getElementById('sort-order').value, time_range: document.getElementById('time-range').value });
+        }
+        async function searchChannel() {
+            const ch = document.getElementById('channel-input').value.trim();
+            if (!ch) { alert('请输入频道 ID'); return; }
+            const m = ch.match(/(UC[a-zA-Z0-9_-]+)/);
+            if (!m && !ch.startsWith('UC')) { alert('无效的频道 ID 格式'); return; }
+            await fetchTrends('/api/trends/channel', { channel_id: m ? m[1] : ch, max_results: 20, order: document.getElementById('channel-sort').value, time_range: document.getElementById('channel-time-range').value });
+        }
+        function renderResults(data) {
+            document.getElementById('results').classList.remove('hidden');
+            document.getElementById('stat-videos').textContent = data.total_count;
+            document.getElementById('stat-views').textContent = formatNumber(Math.round(data.avg_views));
+            const tl = data.videos.reduce((s,v)=>s+v.like_count,0), tc = data.videos.reduce((s,v)=>s+v.comment_count,0);
+            document.getElementById('stat-likes').textContent = formatNumber(Math.round(tl/data.videos.length));
+            document.getElementById('stat-comments').textContent = formatNumber(Math.round(tc/data.videos.length));
+            document.getElementById('stat-freq').textContent = data.upload_frequency.toFixed(1);
+            const mx = data.top_keywords.length || 1;
+            document.getElementById('tags-cloud').innerHTML = data.top_keywords.slice(0,20).map((t,i) => `<span class="tag" style="font-size:${12+(1-i/mx)*8}px">${t}</span>`).join('');
+            document.getElementById('video-grid').innerHTML = data.videos.map(v => `<a href="${v.url}" target="_blank" rel="noopener" class="video-card"><div class="video-thumb"><img src="${v.thumbnail}" alt="${v.title}" loading="lazy"></div><div class="video-info"><div class="video-title">${v.title}</div><div class="video-channel">${v.channel_title}</div><div class="video-stats"><span>▶${formatNumber(v.view_count)}</span><span>👍${formatNumber(v.like_count)}</span><span>💬${formatNumber(v.comment_count)}</span></div></div></a>`).join('');
+            renderCharts(data);
+        }
+        function renderCharts(data) {
+            if (viewsChart) viewsChart.destroy(); if (engagementChart) engagementChart.destroy(); if (compareChart) compareChart.destroy();
+            const lc = document.body.classList.contains('light'), tc = lc?'#666':'#888', gc = lc?'#e0e0e0':'#333';
+            const top = data.videos.slice(0,10);
+            viewsChart = new Chart(document.getElementById('views-chart').getContext('2d'), {
+                type:'bar', data:{ labels:top.map(v=>v.title.substring(0,15)+(v.title.length>15?'...':'')), datasets:[{label:'播放量',data:top.map(v=>v.view_count),backgroundColor:'rgba(255,0,0,0.6)',borderColor:'rgba(255,0,0,1)',borderWidth:1}] },
+                options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{color:tc},grid:{color:gc}},x:{ticks:{color:tc,maxRotation:45},grid:{display:false}}}}
+            });
+            engagementChart = new Chart(document.getElementById('engagement-chart').getContext('2d'), {
+                type:'doughnut', data:{ labels:['点赞数','评论数','收藏数(估算)'], datasets:[{data:[data.videos.reduce((s,v)=>s+v.like_count,0),data.videos.reduce((s,v)=>s+v.comment_count,0),Math.round(data.videos.reduce((s,v)=>s+v.like_count,0)*0.3)],backgroundColor:['#ff0000','#ff6b6b','#c0392b']}] },
+                options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{color:'#fff'}}}}
+            });
+            compareChart = new Chart(document.getElementById('compare-chart').getContext('2d'), {
+                type:'radar', data:{ labels:['平均播放量','平均点赞','平均评论','互动率','发布频率'], datasets:[{label:'当前分析',data:[Math.min(data.avg_views/10000,100),Math.min(data.videos.reduce((s,v)=>s+v.like_count,0)/data.videos.length/1000,100),Math.min(data.videos.reduce((s,v)=>s+v.comment_count,0)/data.videos.length/100,100),Math.min((data.videos.reduce((s,v)=>s+v.like_count+v.comment_count,0)/Math.max(data.videos.reduce((s,v)=>s+v.view_count,1),1))*1000,100),Math.min(data.upload_frequency*10,100)],backgroundColor:'rgba(255,0,0,0.2)',borderColor:'#ff0000',borderWidth:2,pointBackgroundColor:'#ff0000'}]},
+                options:{ responsive:true, maintainAspectRatio:false, scales:{r:{angleLines:{color:gc},grid:{color:gc},pointLabels:{color:tc},ticks:{display:false}}}, plugins:{legend:{position:'bottom',labels:{color:'#fff'}}}}
+            });
+        }
+        function copyResults() { if (!currentData) return; navigator.clipboard.writeText(JSON.stringify(currentData,null,2)).then(()=>alert('已复制到剪贴板')); }
+        function exportJSON() {
+            if (!currentData) return;
+            const b = new Blob([JSON.stringify(currentData,null,2)],{type:'application/json'}), u = URL.createObjectURL(b);
+            const a = document.createElement('a'); a.href=u; a.download=`yt-analysis-${Date.now()}.json`; a.click(); URL.revokeObjectURL(u);
+        }
+        function exportCSV() {
+            if (!currentData?.videos?.length) return;
+            const h=['标题','频道','播放量','点赞','评论','发布日期','链接'];
+            const r=currentData.videos.map(v=>[v.title,v.channel_title,v.view_count,v.like_count,v.comment_count,v.published_at,v.url]);
+            const c=['\ufeff'+h.join(','),...r.map(row=>row.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(','))].join('\n');
+            const b=new Blob([c],{type:'text/csv;charset=utf-8;'}),u=URL.createObjectURL(b);
+            const a=document.createElement('a');a.href=u;a.download=`yt-analysis-${Date.now()}.csv`;a.click();URL.revokeObjectURL(u);
+        }
+        document.getElementById('keywords').addEventListener('keypress',e=>{if(e.key==='Enter')searchTrends();});
+        document.getElementById('channel-input').addEventListener('keypress',e=>{if(e.key==='Enter')searchChannel();});
+        window.addEventListener('load',()=>{const p=new URLSearchParams(window.location.search);if(p.get('keywords')){document.getElementById('keywords').value=p.get('keywords');searchTrends();}});
+    </script>
+</body>
+</html>
