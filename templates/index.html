@@ -99,268 +99,154 @@
         .alert-warning { background: #fef3c7; color: #92400e; }
         body.light .alert-warning { background: #fef3c7; }
         .alert-error { background: #fee2e2; color: #991b1b; }
-        body.light .alert-error { background: #fee2e2; }
+        .batch-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        .batch-table th, .batch-table td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
+        body.light .batch-table th, body.light .batch-table td { border-color: #e0e0e0; }
+        .batch-table th { background: #2a2a2a; color: #ff0000; font-size: 12px; text-transform: uppercase; }
+        body.light .batch-table th { background: #f5f5f5; }
+        .batch-table tr:hover { background: #1a1a1a; }
+        body.light .batch-table tr:hover { background: #f0f0f0; }
+        .rank-badge { display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; background: #ff0000; color: #fff; font-size: 12px; font-weight: bold; }
+        .heat-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:2px; margin-top:8px; }
+        .heat-cell { aspect-ratio:1; border-radius:3px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; font-weight:bold; }
+        .detail-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px; }
+        .detail-card { background:#1a1a1a; border-radius:10px; padding:14px; text-align:center; }
+        body.light .detail-card { background:#fff; border:1px solid #e0e0e0; }
+        .detail-val { font-size:22px; font-weight:bold; color:#ff0000; }
+        .detail-lbl { font-size:11px; color:#888; margin-top:4px; text-transform:uppercase; }
+        .tag-list { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+        .mini-tag { background:#2a2a2a; color:#aaa; padding:3px 10px; border-radius:10px; font-size:11px; }
+        body.light .mini-tag { background:#f0f0f0; color:#666; }
     </style>
 </head>
 <body>
     <button class="theme-toggle" onclick="toggleTheme()">🌙 主题</button>
     <div class="container">
         <h1>📊 YouTube <span>数据分析</span></h1>
-        <div class="search-panel">
-            <div class="tabs">
-                <button class="tab active" onclick="switchTab('keywords')">关键词搜索</button>
-                <button class="tab" onclick="switchTab('channel')">频道分析</button>
-                <button class="tab" onclick="switchTab('compare')">对比分析</button>
-            <div id="keywords-panel">
-                <div class="form-row">
-                    <div class="input-group" style="flex: 2;">
-                        <label>搜索关键词</label>
-                        <input type="text" id="keywords" placeholder="例如: AI, Python教程, 科技新闻">
-                    </div>
-                    <div class="input-group">
-                        <label>时间范围</label>
-                        <select id="time-range">
-                            <option value="today">今天</option>
-                            <option value="this_week">本周</option>
-                            <option value="this_month" selected>本月</option>
-                            <option value="past_year">过去一年</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="input-group">
-                        <label>排序方式</label>
-                        <select id="sort-order">
-                            <option value="relevance">相关性</option>
-                            <option value="date">发布时间</option>
-                            <option value="viewCount" selected>播放量</option>
-                            <option value="rating">评分</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>结果数量</label>
-                        <select id="max-results">
-                            <option value="10">10</option>
-                            <option value="20" selected>20</option>
-                            <option value="30">30</option>
-                            <option value="50">50</option>
-                        </select>
-                    </div>
-                    <div class="input-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;">
-                        <button class="btn-search" onclick="searchTrends()">🔍 搜索</button>
-                    </div>
-                </div>
-                <div class="history-section" id="history-section" style="display: none;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="history-label">最近搜索</span>
-                        <button class="history-clear" onclick="clearHistory()">清除历史</button>
-                    </div>
-                    <div class="history-tags" id="history-tags"></div>
-                </div>
+        <div class="search-panel"><div class="tabs">
+                <button class="tab active" onclick="switchTab(this, 'keywords')">关键词搜索</button>
+                <button class="tab" onclick="switchTab(this, 'channel')">频道分析</button>
+                <button class="tab" onclick="switchTab(this, 'batch')">批量扫描</button>
+                <button class="tab" onclick="switchTab(this, 'hot')">热门类别</button>
+                <button class="tab" onclick="switchTab(this, 'feature')">特征分析</button>
+                <button class="tab" onclick="switchTab(this, 'deep')">深度分析</button>    <button class="tab" onclick="switchTab(this, 'trend')">趋势追踪</button>
             </div>
-            <div id="channel-panel" class="hidden">
-                <div class="form-row">
-                    <div class="input-group" style="flex: 2;">
-                        <label>频道 ID 或 URL</label>
-                        <input type="text" id="channel-input" placeholder="例如: UCXuqS4H64fpLVoXrLhKyQQg 或 https://youtube.com/channel/UC...">
-                    </div>
-                    <div class="input-group">
-                        <label>时间范围</label>
-                        <select id="channel-time-range">
-                            <option value="past_year" selected>过去一年</option>
-                            <option value="past_month">本月</option>
-                            <option value="this_week">本周</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>排序方式</label>
-                        <select id="channel-sort">
-                            <option value="date" selected>发布时间</option>
-                            <option value="viewCount">播放量</option>
-                            <option value="rating">评分</option>
-                        </select>
-                    </div>
-                    <div class="input-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;">
-                        <button class="btn-search" onclick="searchChannel()">📊 分析</button>
-                    </div>
-                </div>
-            </div>
-            </div>
+            <div id="keywords-panel">    <div class="form-row">        <div class="input-group" style="flex: 2;"><label>搜索关键词</label><input type="text" id="keywords" placeholder="例如: AI, Python教程, 科技新闻">        </div>        <div class="input-group"><label>时间范围</label><select id="time-range">    <option value="today">今天</option>    <option value="this_week">本周</option>    <option value="this_month" selected>本月</option>    <option value="past_year">过去一年</option></select>        </div>    </div>    <div class="form-row">        <div class="input-group"><label>排序方式</label><select id="sort-order">    <option value="relevance">相关性</option>    <option value="date">发布时间</option>    <option value="viewCount" selected>播放量</option>    <option value="rating">评分</option></select>        </div>        <div class="input-group"><label>结果数量</label><select id="max-results">    <option value="10">10</option>    <option value="20" selected>20</option>    <option value="30">30</option>    <option value="50">50</option></select>        </div>        <div class="input-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;"><button class="btn-search" onclick="searchTrends()">🔍 搜索</button>        </div>    </div>    <div class="history-section" id="history-section" style="display: none;">        <div style="display: flex; justify-content: space-between; align-items: center;"><span class="history-label">最近搜索</span><button class="history-clear" onclick="clearHistory()">清除历史</button>        </div>        <div class="history-tags" id="history-tags"></div>    </div></div><div id="channel-panel" class="hidden">    <div class="form-row">        <div class="input-group" style="flex: 2;"><label>频道 ID 或 URL</label><input type="text" id="channel-input" placeholder="例如: UCXuqS4H64fpLVoXrLhKyQQg 或 https://youtube.com/channel/UC...">        </div>        <div class="input-group"><label>时间范围</label><select id="channel-time-range">    <option value="past_year" selected>过去一年</option>    <option value="past_month">本月</option>    <option value="this_week">本周</option></select>        </div>        <div class="input-group"><label>排序方式</label><select id="channel-sort">    <option value="date" selected>发布时间</option>    <option value="viewCount">播放量</option>    <option value="rating">评分</option></select>        </div>        <div class="input-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;"><button class="btn-search" onclick="searchChannel()">📊 分析</button>        </div>    </div></div></div>
         </div>
-        <div id="compare-panel" class="hidden">
-            <div class="form-row">
-                <div class="input-group">
-                    <label>搜索关键词 1</label>
-                    <input type="text" id="compare-query1" placeholder="例如: AI">
-                </div>
-                <div class="input-group">
-                    <label>搜索关键词 2</label>
-                    <input type="text" id="compare-query2" placeholder="例如: Python教程">
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="input-group" style="flex: 0 0 auto;">
-                    <button class="btn-search" onclick="compareSearches()">📊 对比分析</button>
-                </div>
-            </div>
+        <div id="compare-panel" class="hidden"><div class="form-row">    <div class="input-group">        <label>搜索关键词 1</label>        <input type="text" id="compare-query1" placeholder="例如: AI">    </div>    <div class="input-group">        <label>搜索关键词 2</label>        <input type="text" id="compare-query2" placeholder="例如: Python教程">    </div></div><div class="form-row">    <div class="input-group" style="flex: 0 0 auto;">        <button class="btn-search" onclick="compareSearches()">📊 对比分析</button>    </div></div>
+        <div id="batch-panel" class="hidden"><div class="form-row">    <div class="input-group" style="flex: 3;">        <label>关键词列表（逗号分隔）</label>        <input type="text" id="batch-keywords" placeholder="例如: 健身, 烹饪, 科技, 游戏, 美食, 搞笑">    </div>    <div class="input-group" style="flex: 1;">        <label>时间范围</label>        <select id="batch-time-range"><option value="this_week">本周</option><option value="this_month" selected>本月</option><option value="past_year">过去一年</option>        </select>    </div>    <div class="input-group" style="flex: 1;">        <label>每个关键词结果数</label>        <select id="batch-max-results"><option value="10">10</option><option value="20" selected>20</option><option value="30">30</option>        </select>    </div></div><div class="form-row">    <div class="input-group" style="flex: 0 0 auto;">        <button class="btn-search" onclick="batchScan()">📊 开始扫描</button>    </div></div><div id="batch-scan-results" class="hidden" style="margin-top: 24px;">    <h2 style="margin-bottom: 16px; font-size: 18px;">📊 批量扫描结果</h2>    <div id="batch-table" style="margin-top: 20px;"></div></div>
         </div>
+        <div id="hot-panel" class="hidden"><div class="form-row">    <div class="input-group">        <label>时间范围</label>        <select id="hot-time-range"><option value="this_week">本周</option><option value="this_month" selected>本月</option><option value="past_year">过去一年</option>        </select>    </div>    <div class="input-group">        <label>显示类别数</label>        <select id="hot-max-count"><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option>        </select>    </div>    <div class="input-group" style="flex: 0 0 auto;">        <button class="btn-search" onclick="loadHotCategories()">📊 扫描类别</button>    </div></div><div id="hot-results" class="hidden" style="margin-top: 24px;">    <h2 style="margin-bottom: 16px; font-size: 18px;">🏆 热门 Shorts 类别排名</h2>    <div class="chart-card">        <div class="chart-container" style="height: 400px;"><canvas id="hot-chart"></canvas>        </div>    </div>    <div id="hot-table" style="margin-top: 20px;"></div></div>
         </div>
+        <div id="feature-panel" class="hidden"><div class="form-row">    <div class="input-group" style="flex: 2;">        <label>分析关键词</label>        <input type="text" id="feature-keyword" placeholder="例如: AI">    </div>    <div class="input-group" style="flex: 1;">        <label>时间范围</label>        <select id="feature-time-range"><option value="this_week">本周</option><option value="this_month" selected>本月</option><option value="past_year">过去一年</option>        </select>    </div>    <div class="input-group" style="flex: 1;">        <label>分析视频数</label>        <select id="feature-max-results"><option value="10">10</option><option value="20" selected>20</option><option value="30">30</option>        </select>    </div></div><div class="form-row">    <div class="input-group" style="flex: 0 0 auto;">        <button class="btn-search" onclick="analyzeFeatures()">🔍 分析特征</button>    </div></div><div id="feature-result" class="hidden" style="margin-top: 20px;"></div>
+        </div>
+        <div id="deep-panel" class="hidden"><div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">    <div>        <h3 style="margin-bottom:12px;color:#ccc;">关键词深度分析</h3>        <div class="form-row"><div class="input-group" style="flex:2;">    <label>关键词</label>    <input type="text" id="deep-keyword" placeholder="例如: AI教程"></div><div class="input-group" style="flex:1;">    <label>视频数</label>    <select id="deep-max-results">        <option value="20">20</option>        <option value="30" selected>30</option>        <option value="50">50</option>    </select></div><div class="input-group" style="flex:1;">    <label>时间范围</label>    <select id="deep-time-range">        <option value="this_week">本周</option>        <option value="this_month" selected>本月</option>        <option value="past_year">过去一年</option>    </select></div><div class="input-group" style="flex:0 0 auto; display:flex; align-items:flex-end;">    <button class="btn-search" onclick="analyzeShortsDetailed()">🔍 分析</button></div>        </div>        <div id="deep-result" style="margin-top:16px;"></div>    </div>    <div>        <h3 style="margin-bottom:12px;color:#ccc;">频道 Shorts 分析</h3>        <div class="form-row"><div class="input-group" style="flex:2;">    <label>频道 ID</label>    <input type="text" id="channel-insights-id" placeholder="UC..."></div><div class="input-group" style="flex:1;">    <label>时间范围</label>    <select id="channel-insights-time">        <option value="past_month">本月</option>        <option value="past_year" selected>过去一年</option>    </select></div><div class="input-group" style="flex:0 0 auto; display:flex; align-items:flex-end;">    <button class="btn-search" onclick="getChannelInsights()">📊 分析</button></div>        </div>        <div id="channel-insights-result" style="margin-top:16px;"></div>    </div></div>
+        </div>
+        <div id="trend-panel" class="hidden"><div class="form-row">    <div class="input-group" style="flex: 2;">        <label>关键词</label>        <input type="text" id="trend-keyword" placeholder="输入关键词追踪趋势">    </div>    <div class="input-group">        <label>时间范围</label>        <select id="trend-time-range"><option value="past_year" selected>过去一年</option><option value="past_2years">近两年</option><option value="past_5years">近五年</option>        </select>    </div>    <div class="input-group" style="flex: 0 0 auto;">        <button class="btn-search" onclick="trackTrend()">📈 追踪</button>    </div></div><div id="trend-result" class="hidden" style="margin-top: 20px;"></div>
         </div>
         <div id="loading" class="loading hidden">正在分析<span></span></div>
-        <div id="results" class="hidden">
-            <div class="toolbar">
-                <button class="btn-tool" onclick="copyResults()">📋 复制结果</button>
-                <button class="btn-tool" onclick="exportJSON()">💾 导出 JSON</button>
-                <button class="btn-tool" onclick="exportCSV()">📊 导出 CSV</button>
-            </div>
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="stat-videos">-</div><div class="stat-label">视频总数</div></div>
-                <div class="stat-card"><div class="stat-value" id="stat-views">-</div><div class="stat-label">平均播放量</div></div>
-                <div class="stat-card"><div class="stat-value" id="stat-likes">-</div><div class="stat-label">平均点赞数</div></div>
-                <div class="stat-card"><div class="stat-value" id="stat-comments">-</div><div class="stat-label">平均评论数</div></div>
-                <div class="stat-card"><div class="stat-value" id="stat-freq">-</div><div class="stat-label">月均发布</div></div>
-            </div>
-            <div class="chart-section">
-                <div class="chart-card"><h3>📈 播放量趋势</h3><div class="chart-container"><canvas id="views-chart"></canvas></div></div>
-                <div class="chart-card"><h3>🏷️ 热门标签</h3><div class="tag-cloud" id="tags-cloud"></div></div>
-            </div>
-            <div class="chart-section">
-                <div class="chart-card"><h3>💬 互动率分布</h3><div class="chart-container"><canvas id="engagement-chart"></canvas></div></div>
-                <div class="chart-card"><h3>📊 数据对比</h3><div class="chart-container"><canvas id="compare-chart"></canvas></div></div>
-            </div>
-            <h2 style="margin: 24px 0 16px; font-size: 18px;">🎬 热门视频</h2>
-            <div class="video-grid" id="video-grid"></div>
+        <div id="results" class="hidden"><div class="toolbar">    <button class="btn-tool" onclick="copyResults()">📋 复制结果</button>    <button class="btn-tool" onclick="exportJSON()">💾 导出 JSON</button>    <button class="btn-tool" onclick="exportCSV()">📊 导出 CSV</button></div><div class="stats-grid">    <div class="stat-card"><div class="stat-value" id="stat-videos">-</div><div class="stat-label">视频总数</div></div>    <div class="stat-card"><div class="stat-value" id="stat-views">-</div><div class="stat-label">平均播放量</div></div>    <div class="stat-card"><div class="stat-value" id="stat-likes">-</div><div class="stat-label">平均点赞数</div></div>    <div class="stat-card"><div class="stat-value" id="stat-comments">-</div><div class="stat-label">平均评论数</div></div>    <div class="stat-card"><div class="stat-value" id="stat-freq">-</div><div class="stat-label">月均发布</div></div></div><div class="chart-section">    <div class="chart-card"><h3>📈 播放量趋势</h3><div class="chart-container"><canvas id="views-chart"></canvas></div></div>    <div class="chart-card"><h3>🏷️ 热门标签</h3><div class="tag-cloud" id="tags-cloud"></div></div></div><div class="chart-section">    <div class="chart-card"><h3>💬 互动率分布</h3><div class="chart-container"><canvas id="engagement-chart"></canvas></div></div>    <div class="chart-card"><h3>📊 数据对比</h3><div class="chart-container"><canvas id="compare-chart"></canvas></div></div></div><h2 style="margin: 24px 0 16px; font-size: 18px;">🎬 热门视频</h2><div class="video-grid" id="video-grid"></div>
         </div>
-        <div id="empty" class="empty">
-            <div class="empty-icon">📺</div>
-            <p>输入关键词或频道 ID 开始分析</p>
+        <div id="empty" class="empty"><div class="empty-icon">📺</div><p>输入关键词或频道 ID 开始分析</p>
         </div>
     </div>
-        <div id="comparison-result" class="comparison-result hidden">
-            <h3 style="margin-bottom: 16px;">📊 对比结果</h3>
-            <div id="comparison-content"></div>
+        <div id="comparison-result" class="comparison-result hidden"><h3 style="margin-bottom: 16px;">📊 对比结果</h3><div id="comparison-content"></div>
         </div>
     <script>
         let viewsChart = null, engagementChart = null, compareChart = null, currentData = null;
-        function toggleTheme() {
-            document.body.classList.toggle('light');
-            const isLight = document.body.classList.contains('light');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
-            document.querySelector('.theme-toggle').textContent = isLight ? '☀️ 主题' : '🌙 主题';
+        function toggleTheme() {document.body.classList.toggle('light');const isLight = document.body.classList.contains('light');localStorage.setItem('theme', isLight ? 'light' : 'dark');document.querySelector('.theme-toggle').textContent = isLight ? '☀️ 主题' : '🌙 主题';
         }
-        (function() {
-            const t = localStorage.getItem('theme');
-            if (t === 'light') { document.body.classList.add('light'); document.querySelector('.theme-toggle').textContent = '☀️ 主题'; }
+        (function() {const t = localStorage.getItem('theme');if (t === 'light') { document.body.classList.add('light'); document.querySelector('.theme-toggle').textContent = '☀️ 主题'; }
         })();
-        function loadHistory() {
-            const history = JSON.parse(localStorage.getItem('searchHistory') || '[]');
-            const section = document.getElementById('history-section');
-            const tags = document.getElementById('history-tags');
-            if (!history.length) { section.style.display = 'none'; return; }
-            section.style.display = 'block';
-            tags.innerHTML = history.slice(-5).reverse().map(h => `<span class="history-tag" onclick="useHistory('${h.replace(/'/g, "\\'")}')">${h}</span>`).join('');
+        function loadHistory() {const history = JSON.parse(localStorage.getItem('searchHistory') || '[]');const section = document.getElementById('history-section');const tags = document.getElementById('history-tags');if (!history.length) { section.style.display = 'none'; return; }section.style.display = 'block';tags.innerHTML = history.slice(-5).reverse().map(h => `<span class="history-tag" onclick="useHistory('${h.replace(/'/g, "\\'")}')">${h}</span>`).join('');
         }
-        function saveHistory(query) {
-            let h = JSON.parse(localStorage.getItem('searchHistory') || '[]');
-            h = h.filter(x => x !== query); h.unshift(query);
-            if (h.length > 10) h.pop();
-            localStorage.setItem('searchHistory', JSON.stringify(h)); loadHistory();
+        function saveHistory(query) {let h = JSON.parse(localStorage.getItem('searchHistory') || '[]');h = h.filter(x => x !== query); h.unshift(query);if (h.length > 10) h.pop();localStorage.setItem('searchHistory', JSON.stringify(h)); loadHistory();
         }
         function useHistory(q) { document.getElementById('keywords').value = q; searchTrends(); }
         function clearHistory() { localStorage.removeItem('searchHistory'); loadHistory(); }
         loadHistory();
-        function switchTab(tab) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById('keywords-panel').classList.toggle('hidden', tab !== 'keywords');
-            document.getElementById('channel-panel').classList.toggle('hidden', tab !== 'channel');
+        
+// 调试代码
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM ready');
+    console.log('Tab按钮数量:', document.querySelectorAll('.tab').length);
+    console.log('面板数量:', document.querySelectorAll('[id$="-panel"]').length);
+    
+    // 为每个Tab按钮添加点击事件
+    document.querySelectorAll('.tab').forEach(function(tab, index) {
+        tab.addEventListener('click', function(e) {
+            console.log('Tab点击:', e.target.textContent, 'index:', index);
+        });
+    });
+    loadHistory();
+});
+
+        function switchTab(el, tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));el.classList.add('active');document.getElementById('keywords-panel').classList.toggle('hidden', tab !== 'keywords');document.getElementById('channel-panel').classList.toggle('hidden', tab !== 'channel');document.getElementById('batch-panel').classList.toggle('hidden', tab !== 'batch');document.getElementById('hot-panel').classList.toggle('hidden', tab !== 'hot');document.getElementById('feature-panel').classList.toggle('hidden', tab !== 'feature');document.getElementById('deep-panel').classList.toggle('hidden', tab !== 'deep');document.getElementById('trend-panel').classList.toggle('hidden', tab !== 'trend');document.getElementById('compare-panel').classList.toggle('hidden', tab !== 'compare');
+}
+        function formatNumber(num) {if (!num) return '0';if (num >= 100000000) return (num / 100000000).toFixed(1) + '亿';if (num >= 10000) return (num / 10000).toFixed(1) + '万';return num.toLocaleString();
         }
-        function formatNumber(num) {
-            if (!num) return '0';
-            if (num >= 100000000) return (num / 100000000).toFixed(1) + '亿';
-            if (num >= 10000) return (num / 10000).toFixed(1) + '万';
-            return num.toLocaleString();
+        function formatDate(d) {if (!d) return '';const diff = (Date.now() - new Date(d).getTime()) / 1000;if (diff < 60) return '刚刚'; if (diff < 3600) return Math.floor(diff/60)+'分钟前';if (diff < 86400) return Math.floor(diff/3600)+'小时前';if (diff < 2592000) return Math.floor(diff/86400)+'天前';return new Date(d).toLocaleDateString('zh-CN');
         }
-        function formatDate(d) {
-            if (!d) return '';
-            const diff = (Date.now() - new Date(d).getTime()) / 1000;
-            if (diff < 60) return '刚刚'; if (diff < 3600) return Math.floor(diff/60)+'分钟前';
-            if (diff < 86400) return Math.floor(diff/3600)+'小时前';
-            if (diff < 2592000) return Math.floor(diff/86400)+'天前';
-            return new Date(d).toLocaleDateString('zh-CN');
+        async function fetchTrends(endpoint, params) {const loading = document.getElementById('loading'), results = document.getElementById('results'), empty = document.getElementById('empty');loading.classList.remove('hidden'); results.classList.add('hidden'); empty.classList.add('hidden');try {    const resp = await fetch(`${endpoint}?${new URLSearchParams(params)}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    currentData = await resp.json(); renderResults(currentData);    const url = new URL(window.location.href); url.searchParams.set('keywords', params.keywords?.join(',') || '');    window.history.replaceState({}, '', url);} catch (e) { alert('获取数据失败: ' + e.message); empty.classList.remove('hidden'); }finally { loading.classList.add('hidden'); }
         }
-        async function fetchTrends(endpoint, params) {
-            const loading = document.getElementById('loading'), results = document.getElementById('results'), empty = document.getElementById('empty');
-            loading.classList.remove('hidden'); results.classList.add('hidden'); empty.classList.add('hidden');
-            try {
-                const resp = await fetch(`${endpoint}?${new URLSearchParams(params)}`);
-                if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }
-                currentData = await resp.json(); renderResults(currentData);
-                const url = new URL(window.location.href); url.searchParams.set('keywords', params.keywords?.join(',') || '');
-                window.history.replaceState({}, '', url);
-            } catch (e) { alert('获取数据失败: ' + e.message); empty.classList.remove('hidden'); }
-            finally { loading.classList.add('hidden'); }
+        async function searchTrends() {const kw = document.getElementById('keywords').value.trim();if (!kw) { alert('请输入关键词'); return; }saveHistory(kw);await fetchTrends('/api/trends/search', { keywords: kw.split(',').map(k=>k.trim()), max_results: document.getElementById('max-results').value, order: document.getElementById('sort-order').value, time_range: document.getElementById('time-range').value });
         }
-        async function searchTrends() {
-            const kw = document.getElementById('keywords').value.trim();
-            if (!kw) { alert('请输入关键词'); return; }
-            saveHistory(kw);
-            await fetchTrends('/api/trends/search', { keywords: kw.split(',').map(k=>k.trim()), max_results: document.getElementById('max-results').value, order: document.getElementById('sort-order').value, time_range: document.getElementById('time-range').value });
+        async function searchChannel() {const ch = document.getElementById('channel-input').value.trim();if (!ch) { alert('请输入频道 ID'); return; }const m = ch.match(/(UC[a-zA-Z0-9_-]+)/);if (!m && !ch.startsWith('UC')) { alert('无效的频道 ID 格式'); return; }await fetchTrends('/api/trends/channel', { channel_id: m ? m[1] : ch, max_results: 20, order: document.getElementById('channel-sort').value, time_range: document.getElementById('channel-time-range').value });
         }
-        async function searchChannel() {
-            const ch = document.getElementById('channel-input').value.trim();
-            if (!ch) { alert('请输入频道 ID'); return; }
-            const m = ch.match(/(UC[a-zA-Z0-9_-]+)/);
-            if (!m && !ch.startsWith('UC')) { alert('无效的频道 ID 格式'); return; }
-            await fetchTrends('/api/trends/channel', { channel_id: m ? m[1] : ch, max_results: 20, order: document.getElementById('channel-sort').value, time_range: document.getElementById('channel-time-range').value });
+        function renderResults(data) {document.getElementById('results').classList.remove('hidden');document.getElementById('stat-videos').textContent = data.total_count;document.getElementById('stat-views').textContent = formatNumber(Math.round(data.avg_views));const tl = data.videos.reduce((s,v)=>s+v.like_count,0), tc = data.videos.reduce((s,v)=>s+v.comment_count,0);document.getElementById('stat-likes').textContent = formatNumber(Math.round(tl/data.videos.length));document.getElementById('stat-comments').textContent = formatNumber(Math.round(tc/data.videos.length));document.getElementById('stat-freq').textContent = data.upload_frequency.toFixed(1);const mx = data.top_keywords.length || 1;document.getElementById('tags-cloud').innerHTML = data.top_keywords.slice(0,20).map((t,i) => `<span class="tag" style="font-size:${12+(1-i/mx)*8}px">${t}</span>`).join('');document.getElementById('video-grid').innerHTML = data.videos.map(v => `<a href="${v.url}" target="_blank" rel="noopener" class="video-card"><div class="video-thumb"><img src="${v.thumbnail}" alt="${v.title}" loading="lazy"></div><div class="video-info"><div class="video-title">${v.title}</div><div class="video-channel">${v.channel_title}</div><div class="video-stats"><span>▶${formatNumber(v.view_count)}</span><span>👍${formatNumber(v.like_count)}</span><span>💬${formatNumber(v.comment_count)}</span></div></div></a>`).join('');renderCharts(data);
         }
-        function renderResults(data) {
-            document.getElementById('results').classList.remove('hidden');
-            document.getElementById('stat-videos').textContent = data.total_count;
-            document.getElementById('stat-views').textContent = formatNumber(Math.round(data.avg_views));
-            const tl = data.videos.reduce((s,v)=>s+v.like_count,0), tc = data.videos.reduce((s,v)=>s+v.comment_count,0);
-            document.getElementById('stat-likes').textContent = formatNumber(Math.round(tl/data.videos.length));
-            document.getElementById('stat-comments').textContent = formatNumber(Math.round(tc/data.videos.length));
-            document.getElementById('stat-freq').textContent = data.upload_frequency.toFixed(1);
-            const mx = data.top_keywords.length || 1;
-            document.getElementById('tags-cloud').innerHTML = data.top_keywords.slice(0,20).map((t,i) => `<span class="tag" style="font-size:${12+(1-i/mx)*8}px">${t}</span>`).join('');
-            document.getElementById('video-grid').innerHTML = data.videos.map(v => `<a href="${v.url}" target="_blank" rel="noopener" class="video-card"><div class="video-thumb"><img src="${v.thumbnail}" alt="${v.title}" loading="lazy"></div><div class="video-info"><div class="video-title">${v.title}</div><div class="video-channel">${v.channel_title}</div><div class="video-stats"><span>▶${formatNumber(v.view_count)}</span><span>👍${formatNumber(v.like_count)}</span><span>💬${formatNumber(v.comment_count)}</span></div></div></a>`).join('');
-            renderCharts(data);
-        }
-        function renderCharts(data) {
-            if (viewsChart) viewsChart.destroy(); if (engagementChart) engagementChart.destroy(); if (compareChart) compareChart.destroy();
-            const lc = document.body.classList.contains('light'), tc = lc?'#666':'#888', gc = lc?'#e0e0e0':'#333';
-            const top = data.videos.slice(0,10);
-            viewsChart = new Chart(document.getElementById('views-chart').getContext('2d'), {
-                type:'bar', data:{ labels:top.map(v=>v.title.substring(0,15)+(v.title.length>15?'...':'')), datasets:[{label:'播放量',data:top.map(v=>v.view_count),backgroundColor:'rgba(255,0,0,0.6)',borderColor:'rgba(255,0,0,1)',borderWidth:1}] },
-                options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{color:tc},grid:{color:gc}},x:{ticks:{color:tc,maxRotation:45},grid:{display:false}}}}
-            });
-            engagementChart = new Chart(document.getElementById('engagement-chart').getContext('2d'), {
-                type:'doughnut', data:{ labels:['点赞数','评论数','收藏数(估算)'], datasets:[{data:[data.videos.reduce((s,v)=>s+v.like_count,0),data.videos.reduce((s,v)=>s+v.comment_count,0),Math.round(data.videos.reduce((s,v)=>s+v.like_count,0)*0.3)],backgroundColor:['#ff0000','#ff6b6b','#c0392b']}] },
-                options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{color:'#fff'}}}}
-            });
-            compareChart = new Chart(document.getElementById('compare-chart').getContext('2d'), {
-                type:'radar', data:{ labels:['平均播放量','平均点赞','平均评论','互动率','发布频率'], datasets:[{label:'当前分析',data:[Math.min(data.avg_views/10000,100),Math.min(data.videos.reduce((s,v)=>s+v.like_count,0)/data.videos.length/1000,100),Math.min(data.videos.reduce((s,v)=>s+v.comment_count,0)/data.videos.length/100,100),Math.min((data.videos.reduce((s,v)=>s+v.like_count+v.comment_count,0)/Math.max(data.videos.reduce((s,v)=>s+v.view_count,1),1))*1000,100),Math.min(data.upload_frequency*10,100)],backgroundColor:'rgba(255,0,0,0.2)',borderColor:'#ff0000',borderWidth:2,pointBackgroundColor:'#ff0000'}]},
-                options:{ responsive:true, maintainAspectRatio:false, scales:{r:{angleLines:{color:gc},grid:{color:gc},pointLabels:{color:tc},ticks:{display:false}}}, plugins:{legend:{position:'bottom',labels:{color:'#fff'}}}}
-            });
+        function renderCharts(data) {if (viewsChart) viewsChart.destroy(); if (engagementChart) engagementChart.destroy(); if (compareChart) compareChart.destroy();const lc = document.body.classList.contains('light'), tc = lc?'#666':'#888', gc = lc?'#e0e0e0':'#333';const top = data.videos.slice(0,10);viewsChart = new Chart(document.getElementById('views-chart').getContext('2d'), {    type:'bar', data:{ labels:top.map(v=>v.title.substring(0,15)+(v.title.length>15?'...':'')), datasets:[{label:'播放量',data:top.map(v=>v.view_count),backgroundColor:'rgba(255,0,0,0.6)',borderColor:'rgba(255,0,0,1)',borderWidth:1}] },    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{color:tc},grid:{color:gc}},x:{ticks:{color:tc,maxRotation:45},grid:{display:false}}}}});engagementChart = new Chart(document.getElementById('engagement-chart').getContext('2d'), {    type:'doughnut', data:{ labels:['点赞数','评论数','收藏数(估算)'], datasets:[{data:[data.videos.reduce((s,v)=>s+v.like_count,0),data.videos.reduce((s,v)=>s+v.comment_count,0),Math.round(data.videos.reduce((s,v)=>s+v.like_count,0)*0.3)],backgroundColor:['#ff0000','#ff6b6b','#c0392b']}] },    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{color:'#fff'}}}}});compareChart = new Chart(document.getElementById('compare-chart').getContext('2d'), {    type:'radar', data:{ labels:['平均播放量','平均点赞','平均评论','互动率','发布频率'], datasets:[{label:'当前分析',data:[Math.min(data.avg_views/10000,100),Math.min(data.videos.reduce((s,v)=>s+v.like_count,0)/data.videos.length/1000,100),Math.min(data.videos.reduce((s,v)=>s+v.comment_count,0)/data.videos.length/100,100),Math.min((data.videos.reduce((s,v)=>s+v.like_count+v.comment_count,0)/Math.max(data.videos.reduce((s,v)=>s+v.view_count,1),1))*1000,100),Math.min(data.upload_frequency*10,100)],backgroundColor:'rgba(255,0,0,0.2)',borderColor:'#ff0000',borderWidth:2,pointBackgroundColor:'#ff0000'}]},    options:{ responsive:true, maintainAspectRatio:false, scales:{r:{angleLines:{color:gc},grid:{color:gc},pointLabels:{color:tc},ticks:{display:false}}}, plugins:{legend:{position:'bottom',labels:{color:'#fff'}}}}});
         }
         function copyResults() { if (!currentData) return; navigator.clipboard.writeText(JSON.stringify(currentData,null,2)).then(()=>alert('已复制到剪贴板')); }
-        function exportJSON() {
-            if (!currentData) return;
-            const b = new Blob([JSON.stringify(currentData,null,2)],{type:'application/json'}), u = URL.createObjectURL(b);
-            const a = document.createElement('a'); a.href=u; a.download=`yt-analysis-${Date.now()}.json`; a.click(); URL.revokeObjectURL(u);
+        function exportJSON() {if (!currentData) return;const b = new Blob([JSON.stringify(currentData,null,2)],{type:'application/json'}), u = URL.createObjectURL(b);const a = document.createElement('a'); a.href=u; a.download=`yt-analysis-${Date.now()}.json`; a.click(); URL.revokeObjectURL(u);
         }
-        function exportCSV() {
-            if (!currentData?.videos?.length) return;
-            const h=['标题','频道','播放量','点赞','评论','发布日期','链接'];
-            const r=currentData.videos.map(v=>[v.title,v.channel_title,v.view_count,v.like_count,v.comment_count,v.published_at,v.url]);
-            const c=['\ufeff'+h.join(','),...r.map(row=>row.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(','))].join('\n');
-            const b=new Blob([c],{type:'text/csv;charset=utf-8;'}),u=URL.createObjectURL(b);
-            const a=document.createElement('a');a.href=u;a.download=`yt-analysis-${Date.now()}.csv`;a.click();URL.revokeObjectURL(u);
+        function exportCSV() {if (!currentData?.videos?.length) return;const h=['标题','频道','播放量','点赞','评论','发布日期','链接'];const r=currentData.videos.map(v=>[v.title,v.channel_title,v.view_count,v.like_count,v.comment_count,v.published_at,v.url]);const c=['\ufeff'+h.join(','),...r.map(row=>row.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(','))].join('\n');const b=new Blob([c],{type:'text/csv;charset=utf-8;'}),u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`yt-analysis-${Date.now()}.csv`;a.click();URL.revokeObjectURL(u);
         }
         document.getElementById('keywords').addEventListener('keypress',e=>{if(e.key==='Enter')searchTrends();});
         document.getElementById('channel-input').addEventListener('keypress',e=>{if(e.key==='Enter')searchChannel();});
         window.addEventListener('load',()=>{const p=new URLSearchParams(window.location.search);if(p.get('keywords')){document.getElementById('keywords').value=p.get('keywords');searchTrends();}});
+    
+        // Batch scan
+        async function batchScan() {const kw = document.getElementById('batch-keywords').value.trim();if (!kw) { alert('请输入关键词'); return; }const loading = document.getElementById('loading'), results = document.getElementById('batch-scan-results');loading.classList.remove('hidden'); results.classList.add('hidden');try {    const resp = await fetch(`/api/trends/batch-scan?keywords=${encodeURIComponent(kw)}&time_range=${document.getElementById('batch-time-range').value}&max_results=${document.getElementById('batch-max-results').value}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    const data = await resp.json();    renderBatchResults(data);    results.classList.remove('hidden');} catch (e) { alert('扫描失败: ' + e.message); }finally { loading.classList.add('hidden'); }
+        }
+        function renderBatchResults(data) {const table = document.getElementById('batch-table');const lc = document.body.classList.contains('light');const tc = lc ? '#666' : '#888', gc = lc ? '#e0e0e0' : '#333';let html = '<table class="batch-table"><thead><tr><th>关键词</th><th>视频数</th><th>平均播放</th><th>平均点赞</th><th>互动率</th><th>最佳时段</th></tr></thead><tbody>';data.forEach(r => {    html += `<tr><td><strong>${r.keyword}</strong></td><td>${r.total_videos}</td><td>${formatNumber(Math.round(r.avg_views))}</td><td>${formatNumber(Math.round(r.avg_likes))}</td><td>${(r.avg_engagement * 100).toFixed(2)}%</td><td>${r.top_hour || '-'}</td></tr>`;});html += '</tbody></table>';table.innerHTML = html;
+        }
+
+        // Hot categories
+        async function loadHotCategories() {const loading = document.getElementById('loading'), results = document.getElementById('hot-results');loading.classList.remove('hidden'); results.classList.add('hidden');try {    const resp = await fetch(`/api/trends/hot-categories?time_range=${document.getElementById('hot-time-range').value}&max_results=${document.getElementById('hot-max-count').value}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    const data = await resp.json();    renderHotResults(data);    results.classList.remove('hidden');} catch (e) { alert('扫描失败: ' + e.message); }finally { loading.classList.add('hidden'); }
+        }
+        function renderHotResults(data) {const chart = document.getElementById('hot-chart');if (window.hotChart) window.hotChart.destroy();const lc = document.body.classList.contains('light'), tc = lc?'#666':'#888', gc = lc?'#e0e0e0':'#333';window.hotChart = new Chart(chart.getContext('2d'), {    type:'bar',    data:{ labels: data.map(k=>k.category), datasets:[{ label:'平均播放量', data: data.map(k=>k.avg_views), backgroundColor: 'rgba(255,0,0,0.7)', borderColor: '#ff0000', borderWidth: 1 }] },    options: { responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ beginAtZero:true, ticks:{ color:tc, callback:v=>formatNumber(v) }, grid:{ color:gc } }, y:{ ticks:{ color:tc }, grid:{ display:false } } } }});const tableHtml = '<table class="batch-table"><thead><tr><th>#</th><th>类别</th><th>平均播放量</th><th>视频数</th><th>最高单视频</th><th>互动率</th></tr></thead><tbody>' +    data.map((k,i) => `<tr>        <td><span class="rank-badge">${i+1}</span></td>        <td><strong>${k.category}</strong></td>        <td>${formatNumber(Math.round(k.avg_views))}</td>        <td>${k.video_count}</td>        <td>${formatNumber(k.top_video_views)}</td>        <td>${k.engagement_rate.toFixed(2)}%</td>    </tr>`).join('') + '</tbody></table>';document.getElementById('hot-table').innerHTML = tableHtml;
+        }
+
+        // Feature analysis
+        async function analyzeFeatures() {const kw = document.getElementById('feature-keyword').value.trim();if (!kw) { alert('请输入关键词'); return; }const loading = document.getElementById('loading'), results = document.getElementById('feature-result');loading.classList.remove('hidden'); results.classList.add('hidden');try {    const resp = await fetch(`/api/trends/feature-analysis?keyword=${encodeURIComponent(kw)}&time_range=${document.getElementById('feature-time-range').value}&max_results=${document.getElementById('feature-max-results').value}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    const data = await resp.json();    renderFeatureResults(data);    results.classList.remove('hidden');} catch (e) { alert('分析失败: ' + e.message); }finally { loading.classList.add('hidden'); }
+        }
+        function renderFeatureResults(data) {const lc = document.body.classList.contains('light');const tc = lc ? '#666' : '#888', gc = lc ? '#e0e0e0' : '#333';let html = '<div class="detail-grid">';html += `<div class="detail-card"><div class="detail-val">${data.total_videos}</div><div class="detail-lbl">总视频数</div></div>`;html += `<div class="detail-card"><div class="detail-val">${formatNumber(Math.round(data.avg_views))}</div><div class="detail-lbl">平均播放</div></div>`;html += `<div class="detail-card"><div class="detail-val">${(data.avg_engagement * 100).toFixed(2)}%</div><div class="detail-lbl">平均互动率</div></div>`;html += `<div class="detail-card"><div class="detail-val">${data.avg_title_length?.toFixed(1) || '-'}</div><div class="detail-lbl">平均标题长度</div></div>`;html += '</div>';if (data.posting_hours?.length) {    html += '<div class="chart-card"><h3>最佳发布时间</h3><div class="chart-container" style="height:300px;"><canvas id="posting-chart"></canvas></div></div>';    setTimeout(() => {        const ctx = document.getElementById('posting-chart').getContext('2d');        if (window.postingChart) window.postingChart.destroy();        window.postingChart = new Chart(ctx, {type: 'bar',data: { labels: data.posting_hours.map(h=>h.hour), datasets: [{ label:'互动率', data: data.posting_hours.map(h=>(h.engagement*100).toFixed(2)), backgroundColor: 'rgba(255,0,0,0.7)', borderColor: '#ff0000', borderWidth: 1 }] },options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{color:tc},grid:{color:gc}},x:{ticks:{color:tc},grid:{display:false}}}}        });    }, 100);}if (data.duration_buckets?.length) {    html += '<div class="chart-card" style="margin-top:20px;"><h3>时长分布</h3><div class="chart-container" style="height:250px;"><canvas id="duration-chart"></canvas></div></div>';    setTimeout(() => {        const ctx = document.getElementById('duration-chart').getContext('2d');        if (window.durationChart) window.durationChart.destroy();        window.durationChart = new Chart(ctx, {type: 'doughnut',data: { labels: data.duration_buckets.map(d=>d.bucket), datasets: [{ data: data.duration_buckets.map(d=>d.count), backgroundColor: ['#ff0000','#ff6b6b','#c0392b','#e74c3c','#f39c12','#2ecc71'] }] },options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{color:'#fff'}}}}        });    }, 100);}if (data.title_patterns?.length) {    html += '<div style="margin-top:20px;"><h3>标题特征</h3><div class="tag-list" style="margin-top:12px;">';    data.title_patterns.forEach(p => {        html += `<span class="mini-tag">${p.pattern} (${p.count})</span>`;    });    html += '</div></div>';}document.getElementById('feature-result').innerHTML = html;
+        }
+
+        // Detailed shorts analysis
+        async function analyzeShortsDetailed() {const kw = document.getElementById('deep-keyword').value.trim();if (!kw) { alert('请输入关键词'); return; }const results = document.getElementById('deep-result');results.innerHTML = '<div class="loading">分析中...</div>';results.classList.remove('hidden');try {    const resp = await fetch(`/api/shorts/detailed?keyword=${encodeURIComponent(kw)}&max_results=${document.getElementById('deep-max-results').value}&time_range=${document.getElementById('deep-time-range').value}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    const data = await resp.json();    renderDetailedResults(data);} catch (e) { results.innerHTML = `<div class="alert alert-error">失败: ${e.message}</div>`; }
+        }
+        function renderDetailedResults(data) {const lc = document.body.classList.contains('light');const tc = lc ? '#666' : '#888', gc = lc ? '#e0e0e0' : '#333';let html = '<div class="detail-grid">';html += `<div class="detail-card"><div class="detail-val">${data.total_videos}</div><div class="detail-lbl">总视频数</div></div>`;html += `<div class="detail-card"><div class="detail-val">${formatNumber(Math.round(data.avg_views))}</div><div class="detail-lbl">平均播放</div></div>`;html += `<div class="detail-card"><div class="detail-val">${(data.avg_engagement * 100).toFixed(2)}%</div><div class="detail-lbl">平均互动率</div></div>`;html += `<div class="detail-card"><div class="detail-val">${data.avg_duration?.toFixed(1) || '-'}</div><div class="detail-lbl">平均时长(秒)</div></div>`;html += '</div>';if (data.hourly_stats?.length) {    html += '<div class="chart-card"><h3>分时段互动率</h3><div class="chart-container" style="height:250px;"><canvas id="hourly-chart"></canvas></div></div>';    setTimeout(() => {        const ctx = document.getElementById('hourly-chart').getContext('2d');        if (window.hourlyChart) window.hourlyChart.destroy();        window.hourlyChart = new Chart(ctx, {type: 'line',data: { labels: data.hourly_stats.map(h=>h.hour), datasets: [{ label:'互动率', data: data.hourly_stats.map(h=>(h.engagement*100).toFixed(2)), borderColor: '#ff0000', backgroundColor: 'rgba(255,0,0,0.1)', tension: 0.4, fill: true }] },options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:tc}}}, scales:{y:{beginAtZero:true,ticks:{color:tc,callback:v=>v+'%'},grid:{color:gc}},x:{ticks:{color:tc},grid:{display:false}}}}        });    }, 100);}if (data.duration_buckets?.length) {    html += '<div class="chart-card" style="margin-top:20px;"><h3>时长分布</h3><div class="chart-container" style="height:250px;"><canvas id="detail-duration-chart"></canvas></div></div>';    setTimeout(() => {        const ctx = document.getElementById('detail-duration-chart').getContext('2d');        if (window.detailDurationChart) window.detailDurationChart.destroy();        window.detailDurationChart = new Chart(ctx, {type: 'bar',data: { labels: data.duration_buckets.map(d=>d.bucket), datasets: [{ label:'视频数', data: data.duration_buckets.map(d=>d.count), backgroundColor: 'rgba(255,0,0,0.7)', borderColor: '#ff0000', borderWidth: 1 }] },options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{color:tc},grid:{color:gc}},x:{ticks:{color:tc},grid:{display:false}}}}        });    }, 100);}if (data.quantiles?.length) {    html += '<div style="margin-top:20px;"><h3>播放量分位</h3><div style="margin-top:12px;">';    data.quantiles.forEach(q => {        html += `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid ${lc?'#e0e0e0':'#333'};"><span>${q.label}</span><span style="color:#ff0000;font-weight:bold;">${formatNumber(q.threshold)}</span></div>`;    });    html += '</div></div>';}document.getElementById('deep-result').innerHTML = html;
+        }
+
+        // Channel insights
+        async function getChannelInsights() {const cid = document.getElementById('channel-insights-id').value.trim();if (!cid) { alert('请输入频道 ID'); return; }const results = document.getElementById('channel-insights-result');results.innerHTML = '<div class="loading">分析中...</div>';results.classList.remove('hidden');try {    const resp = await fetch(`/api/shorts/channel-insights?channel_id=${encodeURIComponent(cid)}&time_range=${document.getElementById('channel-insights-time').value}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    const data = await resp.json();    renderChannelInsights(data);} catch (e) { results.innerHTML = `<div class="alert alert-error">失败: ${e.message}</div>`; }
+        }
+        function renderChannelInsights(data) {const lc = document.body.classList.contains('light');const tc = lc ? '#666' : '#888', gc = lc ? '#e0e0e0' : '#333';let html = '<div class="detail-grid">';html += `<div class="detail-card"><div class="detail-val">${data.total_shorts}</div><div class="detail-lbl">Shorts 总数</div></div>`;html += `<div class="detail-card"><div class="detail-val">${formatNumber(Math.round(data.avg_views))}</div><div class="detail-lbl">平均播放</div></div>`;html += `<div class="detail-card"><div class="detail-val">${(data.avg_engagement * 100).toFixed(2)}%</div><div class="detail-lbl">平均互动率</div></div>`;html += `<div class="detail-card"><div class="detail-val">${data.upload_frequency?.toFixed(1) || '-'}</div><div class="detail-lbl">周均发布</div></div>`;html += '</div>';if (data.posting_hours?.length) {    html += '<div class="chart-card"><h3>最佳发布时段</h3><div class="chart-container" style="height:250px;"><canvas id="channel-posting-chart"></canvas></div></div>';    setTimeout(() => {        const ctx = document.getElementById('channel-posting-chart').getContext('2d');        if (window.channelPostingChart) window.channelPostingChart.destroy();        window.channelPostingChart = new Chart(ctx, {type: 'bar',data: { labels: data.posting_hours.map(h=>h.hour), datasets: [{ label:'互动率', data: data.posting_hours.map(h=>(h.engagement*100).toFixed(2)), backgroundColor: 'rgba(255,0,0,0.7)', borderColor: '#ff0000', borderWidth: 1 }] },options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{color:tc,callback:v=>v+'%'},grid:{color:gc}},x:{ticks:{color:tc},grid:{display:false}}}}        });    }, 100);}document.getElementById('channel-insights-result').innerHTML = html;
+        }
+
+        // Trend tracking
+        async function trackTrend() {const kw = document.getElementById('trend-keyword').value.trim();if (!kw) { alert('请输入关键词'); return; }const loading = document.getElementById('loading'), results = document.getElementById('trend-result');loading.classList.remove('hidden'); results.classList.add('hidden');try {    const resp = await fetch(`/api/trends/track?keyword=${encodeURIComponent(kw)}&time_range=${document.getElementById('trend-time-range').value}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    const data = await resp.json();    renderTrendResults(data);    results.classList.remove('hidden');} catch (e) { alert('追踪失败: ' + e.message); }finally { loading.classList.add('hidden'); }
+        }
+        function renderTrendResults(data) {const lc = document.body.classList.contains('light');const tc = lc ? '#666' : '#888', gc = lc ? '#e0e0e0' : '#333';let html = '<div class="chart-card"><h3>趋势变化</h3><div class="chart-container" style="height:300px;"><canvas id="trend-chart"></canvas></div></div>';if (data.snapshots?.length) {    html += '<div style="margin-top:20px;"><h3>历史记录</h3><div style="margin-top:12px;">';    data.snapshots.forEach(s => {        html += `<div style="padding: 8px 0; border-bottom: 1px solid #333; font-size: 13px;"><span style="color: #888;">${new Date(s.recorded_at).toLocaleString()}</span><span style="float: right; color: #00ff88;">${formatNumber(Math.round(s.avg_views))} 播放</span><span style="float: right; margin-right: 12px; color: #888;">${s.total_videos} 视频</span>        </div>`;    }).reverse().join('') : '<div style="color: #666; padding: 12px;">暂无历史记录，点击"强制刷新"获取首次数据</div>';    html += '</div></div>';}document.getElementById('trend-result').innerHTML = html;setTimeout(() => {    const ctx = document.getElementById('trend-chart').getContext('2d');    if (window.trendChart) window.trendChart.destroy();    window.trendChart = new Chart(ctx, {        type: 'line',        data: { labels: data.dates, datasets: [{ label:'平均播放量', data: data.avg_views, borderColor: '#ff0000', backgroundColor: 'rgba(255,0,0,0.1)', tension: 0.4, fill: true }, { label:'视频数', data: data.video_count, borderColor: '#00ff88', backgroundColor: 'rgba(0,255,136,0.1)', tension: 0.4, fill: false, yAxisID: 'y1' }] },        options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:tc}}}, scales:{y:{beginAtZero:true,ticks:{color:tc,callback:v=>formatNumber(v)},grid:{color:gc}},y1:{position:'right',beginAtZero:true,ticks:{color:'#00ff88'},grid:{display:false}},x:{ticks:{color:tc},grid:{color:gc}}}}    });}, 100);
+        }
+        document.getElementById('deep-keyword').addEventListener('keypress',e=>{if(e.key==='Enter')analyzeShortsDetailed();});
+        document.getElementById('channel-insights-id').addEventListener('keypress',e=>{if(e.key==='Enter')getChannelInsights();});
+        document.getElementById('trend-keyword').addEventListener('keypress',e=>{if(e.key==='Enter')trackTrend();});
+
+
     </script>
 </body>
 </html>
