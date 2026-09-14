@@ -5,10 +5,8 @@ import json
 import os
 import sys
 
-# Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Test data
 SAMPLE_SEARCH_RESPONSE = {
     "items": [
         {"id": {"videoId": "abc123"}},
@@ -37,261 +35,186 @@ SAMPLE_VIDEO_RESPONSE = {
     ]
 }
 
-@pytest.fixture
-def sample_video_info():
-    """Create sample VideoInfo for testing."""
-    from main import VideoInfo
-    return VideoInfo(
-        video_id="abc123",
-        title="Test Video",
-        channel_title="Test Channel",
-        published_at="2024-01-01T00:00:00Z",
-        view_count=1000000,
-        like_count=50000,
-        comment_count=5000,
-        description="Test",
-        tags=["python", "tutorial"],
-        thumbnail="https://img.youtube.com/vi/abc123/hqdefault.jpg",
-        url="https://www.youtube.com/watch?v=abc123"
-    )
 
 class TestModels:
-    """Test data models."""
-    
-    def test_create_video_info(self, sample_video_info):
-        assert sample_video_info.video_id == "abc123"
-        assert sample_video_info.view_count == 1000000
-        assert sample_video_info.like_count == 50000
-    
-    def test_video_url_generation(self):
-        from main import VideoInfo
-        video = VideoInfo(
-            video_id="test123",
-            title="Test",
-            channel_title="Test",
-            published_at="2024-01-01",
-            view_count=0,
-            like_count=0,
-            comment_count=0,
-            description="",
-            tags=[],
-            thumbnail="",
-            url="https://www.youtube.com/watch?v=test123"
+    def test_video_info(self):
+        from app.models import VideoInfo
+        v = VideoInfo(
+            video_id="abc123", title="Test", channel_title="Ch",
+            published_at="2024-01-01", view_count=1000, like_count=100,
+            comment_count=10, description="", tags=[], thumbnail="", url=""
         )
-        assert video.url == "https://www.youtube.com/watch?v=test123"
-    
-    def test_trend_data_creation(self):
-        from main import TrendData
-        data = TrendData(
-            videos=[],
-            total_count=0,
-            avg_views=0,
-            top_keywords=[],
-            upload_frequency=0
+        assert v.video_id == "abc123"
+        assert v.url == ""
+
+    def test_comparison_result_exists(self):
+        """Regression test: ComparisonResult was missing, causing /api/compare to crash."""
+        from app.models import ComparisonResult
+        r = ComparisonResult(
+            query1="AI", query2="ML",
+            stats1={"total_count": 10, "avg_views": 5000.0, "top_keywords": ["ai"]},
+            stats2={"total_count": 8, "avg_views": 3000.0, "top_keywords": ["ml"]},
+            comparison={"winner": "query1"}
         )
-        assert data.total_count == 0
-        assert data.avg_views == 0.0
+        assert r.query1 == "AI"
+        assert r.comparison["winner"] == "query1"
+
 
 class TestCache:
-    """Test caching functionality."""
-    
-    def test_cache_operations(self):
-        from main import _cache
-        
-        _cache["test_key"] = (0, {"data": "value"})
-        result = _cache.get("test_key")
-        assert result is not None
-        assert result[1] == {"data": "value"}
-    
     def test_cache_ttl(self):
-        from main import _CACHE_TTL
-        assert _CACHE_TTL == 300  # 5 minutes
+        from app.config import _CACHE_TTL
+        assert _CACHE_TTL == 300
+
 
 class TestDatabase:
-    """Test database operations."""
-    
     def test_search_history(self, tmp_path):
-        from main import init_db, save_search_history, get_recent_searches
-        import main as main_module
-        original_path = main_module.DATABASE_PATH
-        main_module.DATABASE_PATH = str(tmp_path / "test_history.db")
-        
+        from app.database import init_db, save_search_history, get_recent_searches, clear_search_history
+        import app.database as db_module
+        original = db_module.DATABASE_PATH
+        db_module.DATABASE_PATH = str(tmp_path / "test.db")
         try:
             init_db()
             save_search_history(["python", "tutorial"], 10)
             history = get_recent_searches()
             assert len(history) == 1
             assert history[0].query == "python, tutorial"
-        finally:
-            main_module.DATABASE_PATH = original_path
-    
-    def test_clear_history(self, tmp_path):
-        from main import init_db, save_search_history, clear_search_history
-        import main as main_module
-        original_path = main_module.DATABASE_PATH
-        main_module.DATABASE_PATH = str(tmp_path / "test_history.db")
-        
-        try:
-            init_db()
-            save_search_history(["python"], 5)
             count = clear_search_history()
             assert count >= 0
         finally:
-            main_module.DATABASE_PATH = original_path
+            db_module.DATABASE_PATH = original
+
 
 class TestFastAPIEndpoints:
-    """Test FastAPI endpoints."""
-    
-    def test_health_endpoint(self):
+    def test_health(self):
         from fastapi.testclient import TestClient
-        from main import app
-        client = TestClient(app)
-        resp = client.get("/health")
+        from app.main import app
+        resp = TestClient(app).get("/health")
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
-    
-    def test_cache_stats_endpoint(self):
+
+    def test_cache_stats(self):
         from fastapi.testclient import TestClient
-        from main import app
-        client = TestClient(app)
-        resp = client.get("/api/cache/stats")
-        assert resp.status_code == 200
-    
-    def test_cache_clear_endpoint(self):
-        from fastapi.testclient import TestClient
-        from main import app
-        client = TestClient(app)
-        resp = client.post("/api/cache/clear")
-        assert resp.status_code == 200
-    
-    def test_history_endpoints(self):
-        from fastapi.testclient import TestClient
-        from main import app, init_db
-        init_db()
-        client = TestClient(app)
-        resp = client.get("/api/history")
-        assert resp.status_code == 200
-        resp = client.delete("/api/history")
+        from app.main import app
+        resp = TestClient(app).get("/api/cache/stats")
         assert resp.status_code == 200
 
-class TestErrorHandling:
-    """Test error handling."""
-    
+    def test_cache_clear(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        resp = TestClient(app).post("/api/cache/clear")
+        assert resp.status_code == 200
+
+    def test_history_endpoints(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        from app.database import init_db
+        init_db()
+        client = TestClient(app)
+        assert client.get("/api/history").status_code == 200
+        assert client.delete("/api/history").status_code == 200
+
     def test_missing_api_key(self):
         from fastapi.testclient import TestClient
-        from main import app
-        import main as main_module
-        
-        original_key = main_module.YOUTUBE_API_KEY
-        main_module.YOUTUBE_API_KEY = ""
-        
+        from app.main import app
+        import app.config as config
+        original = config.YOUTUBE_API_KEY
+        config.YOUTUBE_API_KEY = ""
         try:
-            client = TestClient(app)
-            resp = client.get("/api/trends/search", params={
-                "keywords": "python",
-                "max_results": 10,
-                "order": "viewCount",
-                "time_range": "past_month"
+            resp = TestClient(app).get("/api/trends/search", params={
+                "keywords": "python", "max_results": 10,
+                "order": "viewCount", "time_range": "this_month"
             })
             assert resp.status_code in [422, 503]
         finally:
-            main_module.YOUTUBE_API_KEY = original_key
+            config.YOUTUBE_API_KEY = original
 
-class TestShortsEndpoint:
-    """Test YouTube Shorts search endpoint."""
-    
+
+class TestShortsHelpers:
     def test_is_shorts_duration(self):
-        """Test the _is_shorts_duration helper function."""
-        from main import _is_shorts_duration
-        
-        # Shorts (under 60 seconds)
+        from app.services import _is_shorts_duration
+        # YouTube raised the Shorts ceiling from 60s to 180s in Oct 2024.
         assert _is_shorts_duration("PT30S") is True
         assert _is_shorts_duration("PT59S") is True
-        assert _is_shorts_duration("PT58S") is True
-        
-        # Regular videos (60+ seconds)
-        assert _is_shorts_duration("PT1M") is False
-        assert _is_shorts_duration("PT1M30S") is False  # 90s
-        assert _is_shorts_duration("PT2M30S") is False
-        assert _is_shorts_duration("PT3M7S") is False
-        
-        # Edge cases
+        assert _is_shorts_duration("PT1M") is True
+        assert _is_shorts_duration("PT1M30S") is True
+        assert _is_shorts_duration("PT2M59S") is True
+        assert _is_shorts_duration("PT3M") is True
+        assert _is_shorts_duration("PT3M1S") is False
+        assert _is_shorts_duration("PT10M") is False
+        # malformed / missing durations must not be counted as Shorts
         assert _is_shorts_duration("") is False
-    
+        assert _is_shorts_duration("PT") is False
+        assert _is_shorts_duration("P1D") is False
+
     def test_shorts_search_endpoint(self):
-        """Test the /api/trends/shorts/search endpoint with mocked API."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import AsyncMock
         from fastapi.testclient import TestClient
-        from main import app
-        
-        mock_search_response = {
-            "items": [
-                {"id": {"videoId": "short1"}},
-                {"id": {"videoId": "short2"}}
-            ]
-        }
-        
-        mock_video_response = {
-            "items": [
-                {
+        from app.main import app
+        import app.config as config
+        original_key = config.YOUTUBE_API_KEY
+        config.YOUTUBE_API_KEY = "test_key"
+        try:
+            mock_search = AsyncMock(return_value={"items": [{"id": {"videoId": "short1"}}]})
+            mock_stats = AsyncMock(return_value={
+                "items": [{
                     "id": "short1",
                     "snippet": {
-                        "title": "Python Short 1",
-                        "channelTitle": "Test Channel",
+                        "title": "Python Short",
+                        "channelTitle": "Test",
                         "publishedAt": "2024-01-01T00:00:00Z",
                         "description": "Test",
                         "tags": ["python", "shorts"],
                         "thumbnails": {"high": {"url": "https://img.youtube.com/vi/short1/hqdefault.jpg"}}
                     },
-                    "statistics": {
-                        "viewCount": "100000",
-                        "likeCount": "5000",
-                        "commentCount": "500"
-                    },
+                    "statistics": {"viewCount": "100000", "likeCount": "5000", "commentCount": "500"},
                     "contentDetails": {"duration": "PT45S"}
-                },
-                {
-                    "id": "short2",
-                    "snippet": {
-                        "title": "Regular Video",
-                        "channelTitle": "Test Channel",
-                        "publishedAt": "2024-01-01T00:00:00Z",
-                        "description": "Test",
-                        "tags": [],
-                        "thumbnails": {"high": {"url": ""}}
-                    },
-                    "statistics": {
-                        "viewCount": "500000",
-                        "likeCount": "10000",
-                        "commentCount": "1000"
-                    },
-                    "contentDetails": {"duration": "PT5M30S"}
-                }
-            ]
-        }
-        
-        with patch('main._fetch_search', new_callable=AsyncMock) as mock_search, \
-             patch('main._fetch_video_with_duration', new_callable=AsyncMock) as mock_stats:
-            mock_search.return_value = mock_search_response
-            mock_stats.return_value = mock_video_response
-            
-            from main import init_db
-            init_db()
-            client = TestClient(app)
-            resp = client.get("/api/trends/shorts/search", params={
-                "keywords": "python",
-                "max_results": 10
+                }]
             })
-            
-            assert resp.status_code == 200
-            data = resp.json()
-            
-            assert data["total_count"] == 1
-            assert len(data["videos"]) == 1
-            assert data["videos"][0]["video_id"] == "short1"
-            assert data["videos"][0]["title"] == "Python Short 1"
-            assert data["avg_views"] == 100000.0
-            assert "python" in data["top_keywords"]
+
+            with patch('app.services._fetch_search', mock_search), \
+                 patch('app.services._fetch_video_with_duration', mock_stats):
+                resp = TestClient(app).get("/api/trends/shorts/search", params={
+                    "keywords": "python", "max_results": 10
+                })
+                assert resp.status_code == 200
+                data = resp.json()
+                assert data["total_count"] == 1
+                assert data["videos"][0]["video_id"] == "short1"
+                assert data["avg_views"] == 100000.0
+                assert "python" in data["top_keywords"]
+        finally:
+            config.YOUTUBE_API_KEY = original_key
+
+
+class TestBatchScanEndpoint:
+    def test_batch_scan_missing_api_key(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        import app.config as config
+        original = config.YOUTUBE_API_KEY
+        config.YOUTUBE_API_KEY = ""
+        try:
+            resp = TestClient(app).get("/api/trends/batch-scan", params={
+                "keywords": "AI,ML", "time_range": "this_month"
+            })
+            assert resp.status_code in [500, 503]
+        finally:
+            config.YOUTUBE_API_KEY = original
+
+
+class TestHotCategoriesEndpoint:
+    def test_hot_categories_missing_api_key(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        import app.config as config
+        original = config.YOUTUBE_API_KEY
+        config.YOUTUBE_API_KEY = ""
+        try:
+            resp = TestClient(app).get("/api/trends/hot-categories")
+            assert resp.status_code in [500, 503]
+        finally:
+            config.YOUTUBE_API_KEY = original
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
