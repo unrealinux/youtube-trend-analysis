@@ -272,6 +272,96 @@ def _candidate_keywords(videos: List[VideoInfo], seed: str, limit: int) -> List[
     return (repeated or ranked)[:limit]
 
 
+_LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9]{2,}")
+_CJK_RUN_RE = re.compile("[\u4e00-\u9fff]{2,}")
+
+
+def _is_emoji(ch: str) -> bool:
+    code = ord(ch)
+    return (
+        0x1F000 <= code <= 0x1FAFF
+        or 0x2600 <= code <= 0x27BF
+        or 0x2B00 <= code <= 0x2BFF
+        or 0x2190 <= code <= 0x21FF
+        or code in (0x203C, 0x2049, 0x2122, 0x2139)
+    )
+
+
+_TITLE_STYLE_FEATURES = {
+    "emoji": lambda t: any(_is_emoji(c) for c in t),
+    "数字": lambda t: any(c.isdigit() for c in t),
+    "疑问句": lambda t: ("?" in t or "？" in t),
+    "感叹句": lambda t: ("!" in t or "！" in t),
+}
+
+
+def _title_terms(title: str) -> set:
+    """Dependency-free title tokens: latin words, #hashtags, CJK bigrams.
+
+    Chinese has no whitespace, so bigrams stand in for word segmentation.
+    """
+    terms = set()
+    title = title or ""
+    terms.update(m.group(0).lower() for m in _LATIN_WORD_RE.finditer(title))
+    terms.update(m.group(1).strip().lower() for m in _HASHTAG_RE.finditer(title))
+    for run in _CJK_RUN_RE.findall(title):
+        terms.update(run[i:i + 2] for i in range(len(run) - 1))
+        if len(run) <= 4:
+            terms.add(run)
+    return {t for t in terms if 2 <= len(t) <= 40 and t.lower() not in _DISCOVER_STOPWORDS}
+
+
+def _title_lift_patterns(videos: List[VideoInfo], limit: int = 8) -> List[str]:
+    """Which title terms/quirks are over-represented in the fastest videos.
+
+    ponytail: descriptive lift over a top-N sample, not a significance test —
+    with <30 videos treat it as a hint, not proof. Falls back to view_count when
+    no video has a usable publish date (velocity 0).
+    """
+    if len(videos) < 4:
+        return []
+    ranked = sorted(videos, key=lambda v: v.views_per_day, reverse=True)
+    if ranked[0].views_per_day <= 0:
+        ranked = sorted(videos, key=lambda v: v.view_count, reverse=True)
+    cutoff = max(1, len(ranked) // 4)
+    top, rest = ranked[:cutoff], ranked[cutoff:]
+    if not rest:
+        return []
+
+    def style_rate(group, predicate) -> float:
+        return sum(1 for v in group if predicate(v.title)) / len(group)
+
+    def term_counts(group) -> Counter:
+        counts: Counter = Counter()
+        for v in group:
+            for term in _title_terms(v.title):
+                counts[term] += 1
+        return counts
+
+    top_counts, rest_counts = term_counts(top), term_counts(rest)
+    # A term must appear in at least 30% of the top group (and never fewer than
+    # 2 videos), otherwise a 2-of-7 coincidence reads as a strong signal.
+    min_support = max(2, (3 * len(top) + 9) // 10)
+    scored = []
+    for term, count in top_counts.items():
+        if count < min_support:
+            continue
+        p_top = count / len(top)
+        p_rest = rest_counts.get(term, 0) / len(rest)
+        lift = (p_top + 0.05) / (p_rest + 0.05)
+        if lift >= 1.5:
+            scored.append((term, lift, count))
+    scored.sort(key=lambda x: (-x[1], -x[2]))
+
+    patterns = [f"{term} ×{lift:.1f}" for term, lift, _ in scored[:limit]]
+    for label, predicate in _TITLE_STYLE_FEATURES.items():
+        p_top, p_rest = style_rate(top, predicate), style_rate(rest, predicate)
+        lift = (p_top + 0.05) / (p_rest + 0.05)
+        if lift >= 1.3 and p_top >= 0.5:
+            patterns.append(f"{label} ×{lift:.1f}")
+    return patterns
+
+
 def analyze_posting_hours(videos: List[VideoInfo]) -> List[str]:
     hour_stats: Dict[int, Dict[str, int]] = {}
     for v in videos:
@@ -641,11 +731,10 @@ async def feature_analysis_service(keyword: str, max_results: int, time_range: s
     all_titles = [v.title for v in videos]
     total_views = sum(v.view_count for v in videos)
 
-    # Title patterns
-    title_patterns: List[str] = []
+    # Title features: average length plus terms over-represented in the fastest
+    # titles (see _title_lift_patterns).
     avg_title_len = sum(len(t) for t in all_titles) / len(all_titles) if all_titles else 0
-    if avg_title_len > 30:
-        title_patterns.append(f"avg title length {avg_title_len:.0f} chars")
+    title_patterns = [f"平均 {avg_title_len:.0f} 字"] + _title_lift_patterns(videos)
 
     durations.sort(reverse=True)
 
@@ -723,7 +812,9 @@ def _build_detailed_result(
     median = view_counts[n // 2]
 
     # Duration buckets (durations came back alongside videos, so no O(n^2) lookup)
-    dur_buckets: Dict[str, List[VideoInfo]] = {"0-15s": [], "15-30s": [], "30-45s": [], "45-60s": []}
+    dur_buckets: Dict[str, List[VideoInfo]] = {
+        "0-15s": [], "15-30s": [], "30-45s": [], "45-60s": [], "60-180s": []
+    }
     for v, secs in zip(videos, durations):
         if secs < 15:
             b = "0-15s"
@@ -731,8 +822,10 @@ def _build_detailed_result(
             b = "15-30s"
         elif secs < 45:
             b = "30-45s"
-        else:
+        elif secs < 60:
             b = "45-60s"
+        else:
+            b = "60-180s"
         dur_buckets[b].append(v)
 
     duration_buckets = []
@@ -905,7 +998,7 @@ async def channel_insights_service(channel_id: str, max_results: int, time_range
     top_videos = sorted(shorts, key=lambda v: v.view_count, reverse=True)[:10]
     views_over_time = [{"date": d, "views": v} for d, v in sorted(views_by_date.items())[-30:]]
 
-    dur_hist = {"<15s": 0, "15-30s": 0, "30-45s": 0, "45-60s": 0}
+    dur_hist = {"<15s": 0, "15-30s": 0, "30-45s": 0, "45-60s": 0, "60-180s": 0}
     for d in durations:
         if d < 15:
             dur_hist["<15s"] += 1
@@ -913,8 +1006,10 @@ async def channel_insights_service(channel_id: str, max_results: int, time_range
             dur_hist["15-30s"] += 1
         elif d < 45:
             dur_hist["30-45s"] += 1
-        else:
+        elif d < 60:
             dur_hist["45-60s"] += 1
+        else:
+            dur_hist["60-180s"] += 1
 
     return ChannelInsightsResult(
         channel_id=channel_id,

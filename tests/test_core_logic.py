@@ -800,3 +800,45 @@ def test_discover_requires_seed_videos(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         run(services.discover_keywords_service("nobody", 5, scan=False, time_range="this_month"))
     assert exc.value.status_code == 404
+
+
+# ---- Long Shorts get their own bucket (was: everything >=45s labeled "45-60s") ----
+
+def test_duration_buckets_split_at_60s(monkeypatch):
+    vids = [short(f"v{i}", 100, duration="PT50S" if i < 3 else "PT2M30S") for i in range(6)]
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP(vids))
+    res = run(services.detailed_shorts_service("kw", 10, "this_month"))
+
+    buckets = {b.label: b.count for b in res.duration_buckets}
+    assert buckets["45-60s"] == 3, "50s belongs in 45-60s"
+    assert buckets["60-180s"] == 3, "150s must not be lumped into 45-60s"
+    assert sum(buckets.values()) == res.total_videos
+
+
+# ---- Title n-gram lift (was: title_patterns was one avg-length string) ----
+
+def test_title_terms_extracts_cjk_bigrams_latin_and_hashtags():
+    terms = services._title_terms("家常菜教程 #EasyRecipe 2024")
+    assert "家常" in terms and "教程" in terms
+    assert "easyrecipe" in terms
+    assert "shorts" not in services._title_terms("#shorts"), "stopwords dropped"
+
+
+def test_title_lift_finds_terms_in_fastest_titles():
+    fast = [services._make_video_info(short(f"f{i}", 1000, published=_days_ago(10), title="家常菜教程"))
+            for i in range(2)]
+    slow = [services._make_video_info(short(f"s{i}", 10, published=_days_ago(10), title="随便拍拍日常"))
+            for i in range(6)]
+
+    patterns = services._title_lift_patterns(fast + slow)
+    assert any("家常" in p for p in patterns), patterns
+
+
+def test_feature_analysis_returns_real_title_patterns(monkeypatch):
+    vids = ([short(f"f{i}", 5000, published=_days_ago(5), title="家常菜教程") for i in range(3)]
+            + [short(f"s{i}", 50, published=_days_ago(5), title="普通日常记录") for i in range(9)])
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP(vids))
+    res = run(services.feature_analysis_service("kw", 20, "this_month"))
+
+    assert any("平均" in p for p in res.title_patterns)
+    assert any("家常" in p for p in res.title_patterns), res.title_patterns
