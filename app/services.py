@@ -17,6 +17,7 @@ from app.models import (
     KeywordResult, HotCategoryResult, ShortsDetailedResult,
     DurationBucket, HourlyStats, ViewsQuantile, TitleLengthBreakdown,
     ChannelInsightsResult, ChannelInsightVideo,
+    DiscoveryCandidate, DiscoveryResult,
 )
 from app.database import (
     get_trend_snapshots, get_today_quota_used, get_keywords_due_for_snapshot,
@@ -243,6 +244,34 @@ def _order_videos(videos: List[VideoInfo], order: str) -> List[VideoInfo]:
     return videos
 
 
+# Keyword discovery mines these sources instead of a segmentation dependency:
+# `snippet.tags` is already structured, and Shorts titles usually carry
+# `#hashtags`.
+_HASHTAG_RE = re.compile(r"#([^\s#!@$%^&*()+=,./?;:'\"\[\]{}|\\<>]{1,40})")
+_DISCOVER_STOPWORDS = {
+    "shorts", "short", "viral", "trending", "fyp", "foryou", "subscribe",
+    "youtube", "video", "videos", "热门", "我要上热门", "上热门", "推荐", "剪辑",
+}
+
+
+def _candidate_keywords(videos: List[VideoInfo], seed: str, limit: int) -> List[tuple]:
+    """Rank keywords co-occurring with the seed, highest first.
+
+    Candidates seen only once are dropped unless nothing repeats, so a niche
+    seed still returns something instead of an empty list.
+    """
+    counts: Counter = Counter()
+    for video in videos:
+        for tag in list(video.tags) + [m.group(1) for m in _HASHTAG_RE.finditer(video.title)]:
+            tag = tag.strip()
+            if 2 <= len(tag) <= 40 and tag.lower() not in _DISCOVER_STOPWORDS:
+                counts[tag] += 1
+    seed_norm = seed.strip().lower()
+    ranked = [(kw, n) for kw, n in counts.most_common() if kw.lower() != seed_norm]
+    repeated = [(kw, n) for kw, n in ranked if n >= 2]
+    return (repeated or ranked)[:limit]
+
+
 def analyze_posting_hours(videos: List[VideoInfo]) -> List[str]:
     hour_stats: Dict[int, Dict[str, int]] = {}
     for v in videos:
@@ -464,6 +493,29 @@ async def search_shorts_service(keywords: List[str], max_results: int, order: st
     )
 
 
+async def _scan_keyword_metrics(keyword: str, days: int, max_results: int = 20) -> Optional[KeywordResult]:
+    """One keyword's Shorts metrics; shared by batch scan and discovery."""
+    vids, all_tags, _ = await _collect_shorts(
+        config.YOUTUBE_API_KEY, keyword + " #shorts", max_results, days
+    )
+    if not vids:
+        return None
+    total_views = sum(v.view_count for v in vids)
+    total_likes = sum(v.like_count for v in vids)
+    total_comments = sum(v.comment_count for v in vids)
+    engagement_rate = (total_likes + total_comments) / max(total_views, 1) * 100
+    velocities = [v.views_per_day for v in vids if v.views_per_day > 0]
+    return KeywordResult(
+        keyword=keyword,
+        avg_views=round(total_views / len(vids), 2),
+        avg_views_per_day=round(sum(velocities) / len(velocities), 2) if velocities else 0.0,
+        total_views=total_views,
+        video_count=len(vids),
+        top_keywords=[kw for kw, _ in Counter(all_tags).most_common(10)],
+        engagement_rate=round(engagement_rate, 2),
+    )
+
+
 async def batch_scan_service(keywords: List[str], max_results: int, time_range: str) -> BatchScanResult:
     days = _resolve_days(time_range)
     if not config.YOUTUBE_API_KEY:
@@ -474,23 +526,7 @@ async def batch_scan_service(keywords: List[str], max_results: int, time_range: 
     async def scan_keyword(keyword: str) -> Optional[KeywordResult]:
         try:
             async with sem:
-                vids, all_tags, _ = await _collect_shorts(
-                    config.YOUTUBE_API_KEY, keyword + " #shorts", max_results, days
-                )
-            if not vids:
-                return None
-            total_views = sum(v.view_count for v in vids)
-            total_likes = sum(v.like_count for v in vids)
-            total_comments = sum(v.comment_count for v in vids)
-            engagement_rate = (total_likes + total_comments) / max(total_views, 1) * 100
-            return KeywordResult(
-                keyword=keyword,
-                avg_views=round(total_views / len(vids), 2),
-                total_views=total_views,
-                video_count=len(vids),
-                top_keywords=[kw for kw, _ in Counter(all_tags).most_common(10)],
-                engagement_rate=round(engagement_rate, 2)
-            )
+                return await _scan_keyword_metrics(keyword, days, max_results)
         except Exception as e:
             logger.error(f"Error scanning keyword '{keyword}': {e}")
             return None
@@ -499,6 +535,58 @@ async def batch_scan_service(keywords: List[str], max_results: int, time_range: 
     results = [r for r in scanned if r is not None]
     results.sort(key=lambda x: x.avg_views, reverse=True)
     return BatchScanResult(keywords=results, sorted_by="avg_views", scanned_at=datetime.now(timezone.utc).isoformat())
+
+
+async def discover_keywords_service(seed: str, limit: int, scan: bool, time_range: str) -> DiscoveryResult:
+    """Find keywords co-occurring with a seed, optionally verified by a scan.
+
+    Phase 1 is cheap (1 search + 1 videos.list): mine the seed's own tags and
+    title hashtags. Phase 2 verifies the top candidates so each row carries
+    real velocity/competition, at 100 quota units per candidate (`scan=True`).
+    """
+    days = _resolve_days(time_range)
+    if not config.YOUTUBE_API_KEY:
+        raise HTTPException(status_code=503, detail="YouTube API Key not configured")
+    seed_videos, _, _ = await _collect_shorts(
+        config.YOUTUBE_API_KEY, seed + " #shorts", 30, days, "date"
+    )
+    if not seed_videos:
+        raise HTTPException(status_code=404, detail="No videos found for this seed")
+    ranked = _candidate_keywords(seed_videos, seed, limit)
+
+    if not scan:
+        candidates = [DiscoveryCandidate(keyword=kw, occurrences=n) for kw, n in ranked]
+    else:
+        sem = asyncio.Semaphore(config.MAX_CONCURRENT_SCANS)
+
+        async def scan_one(keyword: str) -> Optional[KeywordResult]:
+            try:
+                async with sem:
+                    return await _scan_keyword_metrics(keyword, days)
+            except Exception as e:
+                logger.error(f"Error scanning candidate '{keyword}': {e}")
+                return None
+
+        metrics = await asyncio.gather(*(scan_one(kw) for kw, _ in ranked))
+        by_keyword = {m.keyword: m for m in metrics if m is not None}
+        candidates = []
+        for keyword, occurrences in ranked:
+            m = by_keyword.get(keyword)
+            candidates.append(DiscoveryCandidate(
+                keyword=keyword,
+                occurrences=occurrences,
+                scanned=m is not None,
+                avg_views=m.avg_views if m else 0.0,
+                avg_views_per_day=m.avg_views_per_day if m else 0.0,
+                video_count=m.video_count if m else 0,
+                engagement_rate=m.engagement_rate if m else 0.0,
+            ))
+        candidates.sort(key=lambda c: c.avg_views_per_day, reverse=True)
+
+    logger.info(f"Discovery for '{seed}': {len(candidates)} candidates (scan={scan})")
+    return DiscoveryResult(
+        seed=seed, candidates=candidates, scanned_at=datetime.now(timezone.utc).isoformat()
+    )
 
 
 async def hot_categories_service(time_range: str, max_results: int) -> List[HotCategoryResult]:

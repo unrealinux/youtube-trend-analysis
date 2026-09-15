@@ -14,6 +14,7 @@
 - ✅ **特征分析** - 标题长度、时长区间、发布时段、成功评分
 - ✅ **趋势追踪** - 多次快照记录关键词趋势变化（快照与判定基于播放速度，可强制刷新，也可后台自动快照）
 - ✅ **频道搜索** - 按名称搜频道并显示订阅/视频数，一键跳到频道分析
+- ✅ **关键词机会挖掘** - 给一个种子词，从头部视频的标签/话题挖出相关词并按播放速度排序
 - ✅ **数据可视化** - Chart.js 图表展示播放量、互动率、趋势
 - ✅ **搜索历史** - SQLite 持久化，前端"最近搜索"读取后端
 - ✅ **配额监控** - 按实际 API 调用记账（search.list 100 单位 / 次，videos.list 1 单位 / 次）
@@ -101,6 +102,7 @@ HTTPS_PROXY=http://127.0.0.1:10809
 | `/api/shorts/channel-insights` | GET | `channel_id`, `max_results`, `time_range` | 频道 Shorts 洞察 |
 | `/api/trends/trend-tracking` | GET | `keyword`, `limit`(1-100), `refresh`(bool) | 趋势追踪；`refresh=true` 时重扫并追加快照 |
 | `/api/trends/channels/search` | GET | `q`, `max_results` | 按名称搜频道 |
+| `/api/discover` | GET | `seed`, `limit`(1-10), `scan`(bool), `time_range` | 关键词机会挖掘；`scan=true` 会逐个扫描候选（每个 +100 配额） |
 | `/api/quota` | GET | - | 今日配额用量（来自真实记账） |
 | `/api/history` | GET | `limit` | 最近搜索历史 |
 | `/api/history` | DELETE | - | 清空搜索历史 |
@@ -201,6 +203,10 @@ YouTube Data API v3 免费配额为 **每天 10000 单位**（按太平洋时间
 应用会累计每次真实（非缓存命中）调用的消耗，`/api/quota` 和前端工具栏的
 「📉 API 配额」按钮读的就是这份记账。一次「热门类别」扫描会发出 34 次
 `search.list`（约 3300 单位，默认并发上限 8），请留意配额。
+
+`/api/discover` 两阶段：先花 1 次 `search.list` 挖种子视频的标签/话题（便宜），
+再按 `scan` 决定是否逐个扫描候选词（**每个候选 +100 单位**），默认 `limit=5`。
+`scan=false` 时只按共现次数排序，不花额外配额。
 
 ## 自动趋势快照
 

@@ -8,12 +8,13 @@ from app.models import (
     TrendData, ShortsData, ComparisonResult, BatchScanResult,
     HotCategoryResult, FeatureAnalysisResult, ShortsDetailedResult,
     ChannelInsightsResult, TrendTrackingResult, ChannelSearchResult,
+    DiscoveryResult,
 )
 from app.services import (
     search_trends_service, search_shorts_service, batch_scan_service,
     hot_categories_service, feature_analysis_service, detailed_shorts_service,
     channel_insights_service, compare_searches_service, trend_tracking_service,
-    search_channels_service, channel_trends_service,
+    search_channels_service, channel_trends_service, discover_keywords_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -214,4 +215,23 @@ async def search_channels(
         raise
     except Exception as e:
         logger.error(f"Channel search error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/discover", response_model=DiscoveryResult)
+async def discover_keywords(
+    seed: str = Query(..., description="Seed keyword to mine related keywords from"),
+    limit: int = Query(default=5, ge=1, le=10),
+    scan: bool = Query(default=True, description="Verify each candidate with a full scan (100 quota units each)"),
+    time_range: str = Query(default="this_month"),
+):
+    if not seed:
+        raise HTTPException(status_code=400, detail="Seed keyword is required")
+    try:
+        result = await discover_keywords_service(seed, limit, scan, time_range)
+        return result.model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Discovery error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

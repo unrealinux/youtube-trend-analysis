@@ -96,7 +96,24 @@ class KeywordResult(BaseModel):
     total_views: int
     video_count: int
     top_keywords: List[str]
+    avg_views_per_day: float = 0.0
     engagement_rate: float = 0.0
+
+
+class DiscoveryCandidate(BaseModel):
+    keyword: str
+    occurrences: int  # how often it co-occurred in the seed's tags/hashtags
+    scanned: bool = False
+    avg_views: float = 0.0
+    avg_views_per_day: float = 0.0
+    video_count: int = 0
+    engagement_rate: float = 0.0
+
+
+class DiscoveryResult(BaseModel):
+    seed: str
+    candidates: List[DiscoveryCandidate]
+    scanned_at: str
 
 
 class BatchScanResult(BaseModel):

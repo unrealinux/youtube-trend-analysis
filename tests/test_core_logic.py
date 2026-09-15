@@ -330,6 +330,7 @@ def test_channel_search_rejects_bad_time_range_end_to_end(monkeypatch):
     ("/api/trends/feature-analysis", {"keyword": "AI"}),
     ("/api/shorts/detailed", {"keyword": "AI"}),
     ("/api/shorts/channel-insights", {"channel_id": "UCabc"}),
+    ("/api/discover", {"seed": "AI"}),
 ])
 def test_every_time_range_endpoint_rejects_bad_range(monkeypatch, path, params):
     """Parameter validation must not depend on whether a key is configured."""
@@ -402,6 +403,7 @@ def test_channel_trends_service_requires_api_key():
     ("get", "/api/shorts/channel-insights", {"channel_id": "UCabc", "time_range": "this_month"}, None, "total_shorts"),
     ("get", "/api/trends/trend-tracking", {"keyword": "ai"}, None, "trend_direction"),
     ("get", "/api/trends/channels/search", {"q": "test"}, None, "channels"),
+    ("get", "/api/discover", {"seed": "ai", "time_range": "this_month", "scan": "false"}, None, "candidates"),
 ])
 def test_response_model_matches_real_payload(monkeypatch, method, path, params, body, expect_key):
     """A wrong response_model would make FastAPI reject the payload at runtime
@@ -746,3 +748,55 @@ def test_init_db_migrates_old_trend_tracking_table(tmp_path, monkeypatch):
     database.init_db()
     cols = {row[1] for row in database.get_db().execute("PRAGMA table_info(trend_tracking)")}
     assert "views_per_day" in cols
+
+
+# ---- Keyword discovery (seed -> related keywords) ----
+
+def test_discover_ranks_candidates_and_drops_seed_and_stopwords(monkeypatch):
+    vids = [
+        short("a", 100, tags=("美食", "家常菜", "shorts"), title="好吃的 #家常菜"),
+        short("b", 200, tags=("美食", "家常菜"), title="#美食"),
+        short("c", 300, tags=("美食", "探店"), title="探店 #探店"),
+    ]
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP(vids))
+    res = run(services.discover_keywords_service("美食", 5, scan=False, time_range="this_month"))
+
+    got = {c.keyword: c.occurrences for c in res.candidates}
+    assert "美食" not in got, "seed must be dropped"
+    assert "shorts" not in got, "generic tags are stopwords"
+    assert got["家常菜"] == 3  # tag x2 + hashtag x1
+    assert got["探店"] == 2
+    assert all(not c.scanned for c in res.candidates)
+
+
+def test_discover_scan_false_only_fetches_the_seed_sample(monkeypatch):
+    fake = FakeHTTP([short(f"v{i}", 100, tags=("python",)) for i in range(3)])
+    monkeypatch.setattr(services, "fetch_json", fake)
+    run(services.discover_keywords_service("ai", 5, scan=False, time_range="this_month"))
+    assert len(fake.search_calls) == 1
+
+
+def test_discover_scan_true_enriches_candidates_with_velocity(monkeypatch):
+    vids = [short(f"v{i}", 100 * (i + 1), tags=("python",), published=_days_ago(10))
+            for i in range(3)]
+    fake = FakeHTTP(vids)
+    monkeypatch.setattr(services, "fetch_json", fake)
+    res = run(services.discover_keywords_service("ai", 3, scan=True, time_range="this_month"))
+
+    assert [c.keyword for c in res.candidates] == ["python"]
+    top = res.candidates[0]
+    assert top.scanned and top.avg_views_per_day > 0 and top.video_count == 3
+    assert len(fake.search_calls) == 2  # seed + one candidate
+
+
+def test_discover_falls_back_to_singletons_for_niche_seed():
+    vids = [services._make_video_info(short("a", 100, tags=("only-one",)))]
+    assert services._candidate_keywords(vids, "seed", 5) == [("only-one", 1)]
+
+
+def test_discover_requires_seed_videos(monkeypatch):
+    from fastapi import HTTPException
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP([]))
+    with pytest.raises(HTTPException) as exc:
+        run(services.discover_keywords_service("nobody", 5, scan=False, time_range="this_month"))
+    assert exc.value.status_code == 404

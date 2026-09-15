@@ -25,6 +25,10 @@ decisions.
 - **Velocity (`views_per_day`)** — `view_count / age_days`, age floored at 1
   day. The only time-normalised signal; `order=velocity` re-ranks the normal
   candidate pool by it.
+- **Discovery** — given a seed keyword, mine the seed sample's `tags` (structured)
+  and title `#hashtags` for co-occurring candidates. No segmentation dependency.
+  `scan=true` then verifies each candidate with a normal Shorts scan so the row
+  carries velocity and competition; `scan=false` only ranks by co-occurrence.
 - **Quota** — YouTube Data API v3 units. `search.list` = 100, `videos.list` /
   `channels.list` = 1 each. Only real (non-cache-hit) calls are charged. The
   day bucket uses Pacific Time (`QUOTA_TIMEZONE`), matching YouTube's reset.
