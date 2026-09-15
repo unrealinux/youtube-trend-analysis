@@ -2,9 +2,15 @@
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from typing import List
 
 import sqlite3
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover - Python < 3.9
+    ZoneInfo = None
 
 from fastapi.concurrency import run_in_threadpool
 
@@ -12,8 +18,23 @@ from app.models import SearchHistoryEntry, TrendSnapshot
 
 DATABASE_PATH = os.getenv("YT_HISTORY_DB", "youtube_history.db")
 DAILY_QUOTA_LIMIT = 10000
+# YouTube resets the daily quota at midnight Pacific; bucket by that zone so
+# usage is not mislabeled for the ~7-8 hours around the reset.
+QUOTA_TIMEZONE = os.getenv("QUOTA_TIMEZONE", "America/Los_Angeles")
 
 logger = logging.getLogger(__name__)
+
+
+def _quota_day() -> str:
+    """Current YouTube quota day (Pacific Time) as YYYY-MM-DD."""
+    tz = None
+    if ZoneInfo is not None:
+        try:
+            tz = ZoneInfo(QUOTA_TIMEZONE)
+        except Exception:  # unknown zone / missing tzdata -> fall back to UTC
+            tz = None
+    now = datetime.now(tz) if tz else datetime.now(timezone.utc)
+    return now.date().isoformat()
 
 
 def get_db() -> sqlite3.Connection:
@@ -141,14 +162,15 @@ def record_quota_usage(units: int) -> None:
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM api_quota WHERE date = CURRENT_DATE ORDER BY id DESC LIMIT 1")
+        day = _quota_day()
+        cursor.execute("SELECT id FROM api_quota WHERE date = ? ORDER BY id DESC LIMIT 1", (day,))
         row = cursor.fetchone()
         if row:
             cursor.execute("UPDATE api_quota SET used = used + ? WHERE id = ?", (units, row["id"]))
         else:
             cursor.execute(
-                "INSERT INTO api_quota (used, remaining, daily_limit) VALUES (?, ?, ?)",
-                (units, max(0, DAILY_QUOTA_LIMIT - units), DAILY_QUOTA_LIMIT)
+                "INSERT INTO api_quota (date, used, remaining, daily_limit) VALUES (?, ?, ?, ?)",
+                (day, units, max(0, DAILY_QUOTA_LIMIT - units), DAILY_QUOTA_LIMIT)
             )
         conn.commit()
         conn.close()
@@ -159,10 +181,34 @@ def record_quota_usage(units: int) -> None:
 def get_today_quota_used() -> int:
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT used FROM api_quota WHERE date = CURRENT_DATE ORDER BY id DESC LIMIT 1")
+    cursor.execute("SELECT used FROM api_quota WHERE date = ? ORDER BY id DESC LIMIT 1", (_quota_day(),))
     row = cursor.fetchone()
     conn.close()
     return int(row["used"]) if row else 0
+
+
+def get_keywords_due_for_snapshot(cutoff: str, limit: int = 10) -> List[str]:
+    """Tracked keywords whose newest snapshot is older than `cutoff`.
+
+    `recorded_at` is a UTC 'YYYY-MM-DD HH:MM:SS' string, so a string cutoff
+    compares correctly. Keeps the auto-snapshot loop restart-safe: a keyword is
+    only refreshed once per interval, not on every app start.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT keyword FROM trend_tracking
+        GROUP BY keyword
+        HAVING MAX(recorded_at) < ?
+        ORDER BY MAX(recorded_at) ASC
+        LIMIT ?
+        """,
+        (cutoff, limit),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [row["keyword"] for row in rows]
 
 
 # ---- Async wrappers ----

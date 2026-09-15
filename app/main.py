@@ -1,6 +1,8 @@
 """FastAPI application entry point."""
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager, suppress
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -9,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from app import services
 from app.routers import trends, system
 from app.database import init_db
 from app.config import CORS_ORIGINS
@@ -19,7 +22,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="YouTube Trend Analysis", version="2.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Keeps tracked trend keywords growing on their own; a no-op unless
+    # TREND_SNAPSHOT_INTERVAL_HOURS > 0 and keywords are already tracked.
+    task = asyncio.create_task(services.trend_snapshot_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(title="YouTube Trend Analysis", version="2.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

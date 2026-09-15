@@ -12,7 +12,8 @@
 - ✅ **批量扫描** - 多关键词并发扫描并按平均播放量排序
 - ✅ **热门类别** - 扫描预置类别，找出高播放量赛道
 - ✅ **特征分析** - 标题长度、时长区间、发布时段、成功评分
-- ✅ **趋势追踪** - 多次快照记录关键词趋势变化（可强制刷新）
+- ✅ **趋势追踪** - 多次快照记录关键词趋势变化（可强制刷新，也可后台自动快照）
+- ✅ **频道搜索** - 按名称搜频道并显示订阅/视频数，一键跳到频道分析
 - ✅ **数据可视化** - Chart.js 图表展示播放量、互动率、趋势
 - ✅ **搜索历史** - SQLite 持久化，前端"最近搜索"读取后端
 - ✅ **配额监控** - 按实际 API 调用记账（search.list 100 单位 / 次，videos.list 1 单位 / 次）
@@ -49,6 +50,10 @@ cp .env.example .env
 | `HTTP_PROXY` / `HTTPS_PROXY` | 否 | 所在网络无法直连 googleapis.com 时设置代理 |
 | `YT_HISTORY_DB` | 否 | SQLite 路径，默认 `youtube_history.db`（目录不存在会自动创建） |
 | `CORS_ORIGINS` | 否 | 允许跨域的来源，逗号分隔；默认已含 8000/8001 端口的 localhost |
+| `QUOTA_TIMEZONE` | 否 | 配额日切时区，默认 `America/Los_Angeles`（YouTube 按太平洋时间重置） |
+| `MAX_CONCURRENT_SCANS` | 否 | 批量扫描/热门类别的并发上限，默认 `8` |
+| `TREND_SNAPSHOT_INTERVAL_HOURS` | 否 | 自动趋势快照间隔小时，默认 `24`；`0` 关闭 |
+| `TREND_SNAPSHOT_MAX_KEYWORDS` | 否 | 每轮自动快照的关键词上限，默认 `10` |
 
 ### 4. 先验证 Key 能否用（可选，推荐）
 ```bash
@@ -190,8 +195,17 @@ YouTube Data API v3 免费配额为 **每天 10000 单位**（按太平洋时间
 | `channels.list` | 1 单位 |
 
 应用会累计每次真实（非缓存命中）调用的消耗，`/api/quota` 和前端工具栏的
-「📉 API 配额」按钮读的就是这份记账。一次「热门类别」扫描会并发 34 次
-`search.list`（约 3300 单位），请留意配额。
+「📉 API 配额」按钮读的就是这份记账。一次「热门类别」扫描会发出 34 次
+`search.list`（约 3300 单位，默认并发上限 8），请留意配额。
+
+## 自动趋势快照
+
+`trend_tracking` 里已有的关键词，后台每 `TREND_SNAPSHOT_INTERVAL_HOURS`（默认 24）
+小时自动追加快照，让趋势曲线不需要每天手动点「强制刷新」。
+
+- 只处理**已被追踪过**的关键词，不会自己开始追踪新词，因此不会无故消耗配额；
+- 每轮最多 `TREND_SNAPSHOT_MAX_KEYWORDS`（默认 10）个，且当日配额超过 80% 时跳过；
+- 设 `TREND_SNAPSHOT_INTERVAL_HOURS=0` 可完全关闭。
 
 ## 许可证
 

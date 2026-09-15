@@ -8,6 +8,22 @@ REQUEST_TIMEOUT = 30.0
 DATABASE_PATH = os.getenv("YT_HISTORY_DB", "youtube_history.db")
 QUOTA_WARNING_THRESHOLD = 0.8  # 80% quota usage warning
 
+# YouTube resets the daily quota at midnight Pacific, not UTC/local, so the
+# accounting day bucket must use this zone (see database._quota_day).
+QUOTA_TIMEZONE = os.getenv("QUOTA_TIMEZONE", "America/Los_Angeles")
+
+# Batch scan / hot categories fan out one search.list per keyword. Without a cap
+# all of them fire at once (34 for HOT_CATEGORIES), which invites 429s and
+# transient failures. Limit in-flight scans.
+MAX_CONCURRENT_SCANS = int(os.getenv("MAX_CONCURRENT_SCANS", "8"))
+
+# Auto-snapshot trend keywords: every N hours, append a snapshot for keywords
+# already in trend_tracking whose newest snapshot is older than N hours. 0
+# disables it. It never starts tracking a keyword on its own, so it cannot
+# begin spending quota unprompted.
+TREND_SNAPSHOT_INTERVAL_HOURS = float(os.getenv("TREND_SNAPSHOT_INTERVAL_HOURS", "24"))
+TREND_SNAPSHOT_MAX_KEYWORDS = int(os.getenv("TREND_SNAPSHOT_MAX_KEYWORDS", "10"))
+
 # Browser origins allowed to call this API. The app serves its own frontend, so
 # same-origin requests work regardless; this only matters for a separately
 # hosted page. Defaults cover the ports the README and start scripts use.

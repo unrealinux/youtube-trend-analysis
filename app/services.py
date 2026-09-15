@@ -19,7 +19,8 @@ from app.models import (
     ChannelInsightsResult, ChannelInsightVideo,
 )
 from app.database import (
-    get_trend_snapshots,
+    get_trend_snapshots, get_today_quota_used, get_keywords_due_for_snapshot,
+    DAILY_QUOTA_LIMIT,
     save_search_history_async, save_trend_snapshot_async, record_quota_usage_async,
 )
 
@@ -29,6 +30,10 @@ logger = logging.getLogger(__name__)
 # videos.list costs 1. See https://developers.google.com/youtube/v3/determine_quota_cost
 QUOTA_COST_SEARCH = 100
 QUOTA_COST_VIDEOS = 1
+
+# Transient YouTube failures (connection resets, 5xx) are retried; 4xx are not.
+_RETRY_ATTEMPTS = 3
+_RETRY_BASE_DELAY = 0.5  # seconds, doubles each attempt
 
 # ponytail: YouTube lowered the Shorts ceiling from 60s to 180s in Oct 2024.
 # The old 60s gate silently dropped every 1-3 minute Short, so this is a
@@ -70,24 +75,38 @@ def _set_cached(key: str, data: dict) -> None:
 # ---- YouTube API client ----
 
 async def fetch_json(client: httpx.AsyncClient, url: str, params: dict) -> dict:
-    try:
-        resp = await client.get(url, params=params, timeout=config.REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        return resp.json()
-    except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error: {e.response.status_code} - {e.response.text}")
-        if e.response.status_code == 400:
-            raise HTTPException(status_code=400, detail="Invalid YouTube API request")
-        elif e.response.status_code == 403:
-            raise HTTPException(status_code=403, detail="YouTube API quota exceeded")
-        elif e.response.status_code == 404:
-            raise HTTPException(status_code=404, detail="Resource not found")
-        raise HTTPException(status_code=502, detail=f"API error: {e.response.status_code}")
-    except httpx.ConnectTimeout:
+    """GET a YouTube endpoint, retrying transient failures with backoff.
+
+    400/403/404 map straight to an HTTPException — retrying a malformed request,
+    an exhausted quota, or a missing resource only wastes time. Connection
+    errors and 5xx are retried.
+    """
+    last_error: Optional[Exception] = None
+    for attempt in range(_RETRY_ATTEMPTS):
+        try:
+            resp = await client.get(url, params=params, timeout=config.REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            logger.error(f"HTTP error: {status} - {e.response.text[:200]}")
+            if status == 400:
+                raise HTTPException(status_code=400, detail="Invalid YouTube API request")
+            if status == 403:
+                raise HTTPException(status_code=403, detail="YouTube API quota exceeded")
+            if status == 404:
+                raise HTTPException(status_code=404, detail="Resource not found")
+            last_error = e
+            if status < 500:
+                raise HTTPException(status_code=502, detail=f"API error: {status}")
+        except httpx.HTTPError as e:
+            logger.warning(f"Transient YouTube API error (attempt {attempt + 1}): {e}")
+            last_error = e
+        if attempt < _RETRY_ATTEMPTS - 1:
+            await asyncio.sleep(_RETRY_BASE_DELAY * (2 ** attempt))
+    if isinstance(last_error, httpx.TimeoutException):
         raise HTTPException(status_code=504, detail="YouTube API request timeout")
-    except httpx.HTTPError as e:
-        logger.error(f"HTTP error: {e}")
-        raise HTTPException(status_code=502, detail=f"HTTP error: {e}")
+    raise HTTPException(status_code=502, detail=f"HTTP error: {last_error}")
 
 
 async def _fetch_search(api_key: str, params: dict) -> dict:
@@ -401,11 +420,14 @@ async def batch_scan_service(keywords: List[str], max_results: int, time_range: 
     if not config.YOUTUBE_API_KEY:
         raise HTTPException(status_code=503, detail="YouTube API Key not configured")
 
+    sem = asyncio.Semaphore(config.MAX_CONCURRENT_SCANS)
+
     async def scan_keyword(keyword: str) -> Optional[KeywordResult]:
         try:
-            vids, all_tags, _ = await _collect_shorts(
-                config.YOUTUBE_API_KEY, keyword + " #shorts", max_results, days
-            )
+            async with sem:
+                vids, all_tags, _ = await _collect_shorts(
+                    config.YOUTUBE_API_KEY, keyword + " #shorts", max_results, days
+                )
             if not vids:
                 return None
             total_views = sum(v.view_count for v in vids)
@@ -435,11 +457,14 @@ async def hot_categories_service(time_range: str, max_results: int) -> List[HotC
     if not config.YOUTUBE_API_KEY:
         raise HTTPException(status_code=503, detail="YouTube API Key not configured")
 
+    sem = asyncio.Semaphore(config.MAX_CONCURRENT_SCANS)
+
     async def scan_category(category: str) -> Optional[HotCategoryResult]:
         try:
-            vids, all_tags, _ = await _collect_shorts(
-                config.YOUTUBE_API_KEY, category + " #shorts", max_results, days
-            )
+            async with sem:
+                vids, all_tags, _ = await _collect_shorts(
+                    config.YOUTUBE_API_KEY, category + " #shorts", max_results, days
+                )
             if not vids:
                 return None
             total_views = sum(v.view_count for v in vids)
@@ -826,6 +851,49 @@ async def _snapshot_shorts_keyword(keyword: str) -> None:
     await save_trend_snapshot_async(
         keyword, round(total_views / len(vids), 2), len(vids), round(engagement_rate, 2)
     )
+
+
+async def snapshot_due_keywords() -> int:
+    """Append one snapshot per tracked keyword whose newest is stale.
+
+    Only keywords already in `trend_tracking` are touched, so this never starts
+    spending quota on a keyword the user has not tracked; it just keeps existing
+    trend lines alive. Returns the number refreshed.
+    """
+    if not config.YOUTUBE_API_KEY or config.TREND_SNAPSHOT_INTERVAL_HOURS <= 0:
+        return 0
+    if get_today_quota_used() >= DAILY_QUOTA_LIMIT * config.QUOTA_WARNING_THRESHOLD:
+        logger.warning("Trend auto-snapshot skipped: quota usage above threshold")
+        return 0
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(hours=config.TREND_SNAPSHOT_INTERVAL_HOURS)
+    ).strftime("%Y-%m-%d %H:%M:%S")
+    keywords = get_keywords_due_for_snapshot(cutoff, config.TREND_SNAPSHOT_MAX_KEYWORDS)
+    refreshed = 0
+    for keyword in keywords:
+        try:
+            await _snapshot_shorts_keyword(keyword)
+            refreshed += 1
+        except Exception as e:
+            logger.error(f"Trend auto-snapshot failed for '{keyword}': {e}")
+    if refreshed:
+        logger.info(f"Trend auto-snapshot refreshed {refreshed} keyword(s)")
+    return refreshed
+
+
+async def trend_snapshot_loop() -> None:
+    """Background loop started by the app lifespan (no-op when disabled)."""
+    interval_hours = config.TREND_SNAPSHOT_INTERVAL_HOURS
+    if interval_hours <= 0:
+        return
+    while True:
+        try:
+            await snapshot_due_keywords()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(f"Trend snapshot loop error: {e}")
+        await asyncio.sleep(interval_hours * 3600)
 
 
 async def trend_tracking_service(keyword: str, limit: int, refresh: bool = False) -> TrendTrackingResult:

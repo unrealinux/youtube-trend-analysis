@@ -10,6 +10,7 @@ import os
 import sys
 
 import pytest
+import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -486,3 +487,157 @@ def test_compare_rejects_unknown_time_range(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         run(services.compare_searches_service("AI", "ML", "past_month"))
     assert exc.value.status_code == 400
+
+
+# ---- Quota day is Pacific, not UTC (was: CURRENT_DATE -> UTC bucket) ----
+
+def test_quota_day_follows_configured_timezone(monkeypatch):
+    import app.database as database
+    from zoneinfo import ZoneInfo
+    from datetime import datetime
+    for zone in ("America/Los_Angeles", "Pacific/Kiritimati", "Pacific/Niue"):
+        monkeypatch.setattr(database, "QUOTA_TIMEZONE", zone)
+        assert database._quota_day() == datetime.now(ZoneInfo(zone)).date().isoformat()
+    # an unknown zone falls back to UTC instead of raising
+    monkeypatch.setattr(database, "QUOTA_TIMEZONE", "Not/AZone")
+    from datetime import timezone
+    assert database._quota_day() == datetime.now(timezone.utc).date().isoformat()
+
+
+def test_quota_rows_are_keyed_by_quota_day(db):
+    db.record_quota_usage(100)
+    row = db.get_db().execute("SELECT date FROM api_quota").fetchone()
+    assert row["date"] == db._quota_day()
+
+
+# ---- Transient HTTP failures are retried; 4xx are not ----
+
+class _Resp:
+    def __init__(self, payload=None, status=200):
+        self._payload = payload
+        self.status_code = status
+        self.text = str(payload)
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            req = httpx.Request("GET", "http://x")
+            raise httpx.HTTPStatusError(
+                "boom", request=req, response=httpx.Response(self.status_code, request=req)
+            )
+
+    def json(self):
+        return self._payload
+
+
+class FlakyClient:
+    def __init__(self, failures, status=200):
+        self.failures = failures
+        self.status = status
+        self.calls = 0
+
+    async def get(self, *args, **kwargs):
+        self.calls += 1
+        if self.calls <= self.failures:
+            if self.status >= 400:
+                return _Resp(status=self.status)
+            raise httpx.ConnectTimeout("boom")
+        return _Resp({"ok": True})
+
+
+def test_fetch_json_retries_connection_errors(monkeypatch):
+    monkeypatch.setattr(services, "_RETRY_BASE_DELAY", 0)
+    client = FlakyClient(failures=2)
+    assert run(services.fetch_json(client, "http://x", {})) == {"ok": True}
+    assert client.calls == 3
+
+
+def test_fetch_json_gives_up_as_504_after_max_attempts(monkeypatch):
+    from fastapi import HTTPException
+    monkeypatch.setattr(services, "_RETRY_BASE_DELAY", 0)
+    client = FlakyClient(failures=99)
+    with pytest.raises(HTTPException) as exc:
+        run(services.fetch_json(client, "http://x", {}))
+    assert exc.value.status_code == 504
+    assert client.calls == services._RETRY_ATTEMPTS
+
+
+def test_fetch_json_retries_5xx(monkeypatch):
+    monkeypatch.setattr(services, "_RETRY_BASE_DELAY", 0)
+    client = FlakyClient(failures=1, status=503)
+    assert run(services.fetch_json(client, "http://x", {})) == {"ok": True}
+    assert client.calls == 2
+
+
+def test_fetch_json_does_not_retry_403(monkeypatch):
+    """403 is usually an exhausted quota; retrying just burns time."""
+    from fastapi import HTTPException
+    monkeypatch.setattr(services, "_RETRY_BASE_DELAY", 0)
+    client = FlakyClient(failures=99, status=403)
+    with pytest.raises(HTTPException) as exc:
+        run(services.fetch_json(client, "http://x", {}))
+    assert exc.value.status_code == 403
+    assert client.calls == 1
+
+
+# ---- Fan-out scans are concurrency-capped ----
+
+def test_hot_categories_caps_concurrent_scans(monkeypatch, db):
+    state = {"cur": 0, "max": 0}
+
+    async def fake_collect(*args, **kwargs):
+        state["cur"] += 1
+        state["max"] = max(state["max"], state["cur"])
+        await asyncio.sleep(0.01)
+        state["cur"] -= 1
+        return [short("a", 100)], ["t"], [30]
+
+    monkeypatch.setattr(services, "_collect_shorts", fake_collect)
+    run(services.hot_categories_service("this_month", 5))
+
+    assert state["max"] <= config.MAX_CONCURRENT_SCANS
+    assert state["max"] > 1, "categories should still run concurrently"
+
+
+# ---- Auto trend snapshots ----
+
+def _insert_stale_keyword(db, keyword):
+    conn = db.get_db()
+    conn.execute(
+        "INSERT INTO trend_tracking (keyword, avg_views, total_videos, "
+        "engagement_rate, recorded_at) VALUES (?,?,?,?,?)",
+        (keyword, 1.0, 1, 1.0, "2020-01-01 00:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_auto_snapshot_only_refreshes_stale_keywords(monkeypatch, db):
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP([short("a", 1000)]))
+    db.save_trend_snapshot("fresh", 10.0, 1, 1.0)     # just now
+    _insert_stale_keyword(db, "stale")
+
+    assert run(services.snapshot_due_keywords()) == 1
+    assert len(db.get_trend_snapshots("stale", 10)) == 2
+    assert len(db.get_trend_snapshots("fresh", 10)) == 1
+
+
+def test_auto_snapshot_disabled_when_interval_is_zero(monkeypatch, db):
+    monkeypatch.setattr(config, "TREND_SNAPSHOT_INTERVAL_HOURS", 0)
+    _insert_stale_keyword(db, "stale")
+    assert run(services.snapshot_due_keywords()) == 0
+    assert len(db.get_trend_snapshots("stale", 10)) == 1
+
+
+def test_auto_snapshot_skips_when_quota_above_threshold(monkeypatch, db):
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP([short("a", 1000)]))
+    db.record_quota_usage(int(db.DAILY_QUOTA_LIMIT * config.QUOTA_WARNING_THRESHOLD) + 1)
+    _insert_stale_keyword(db, "stale")
+
+    assert run(services.snapshot_due_keywords()) == 0
+    assert len(db.get_trend_snapshots("stale", 10)) == 1
+
+
+def test_auto_snapshot_loop_is_noop_when_disabled(monkeypatch):
+    monkeypatch.setattr(config, "TREND_SNAPSHOT_INTERVAL_HOURS", 0)
+    # returns immediately instead of sleeping forever
+    run(asyncio.wait_for(services.trend_snapshot_loop(), timeout=1))

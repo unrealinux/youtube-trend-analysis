@@ -20,7 +20,12 @@ decisions.
   without it the stored history is served as-is. Direction compares the latest
   two snapshots: `> +10%` rising, `< -10%` falling, else stable.
 - **Quota** — YouTube Data API v3 units. `search.list` = 100, `videos.list` /
-  `channels.list` = 1 each. Only real (non-cache-hit) calls are charged.
+  `channels.list` = 1 each. Only real (non-cache-hit) calls are charged. The
+  day bucket uses Pacific Time (`QUOTA_TIMEZONE`), matching YouTube's reset.
+- **Auto snapshot** — background loop (`TREND_SNAPSHOT_INTERVAL_HOURS`, default
+  24) that appends a snapshot for keywords already in `trend_tracking` whose
+  newest snapshot is stale. Never starts tracking a new keyword, capped per
+  cycle, and skipped above 80% daily quota.
 - **Cache** — in-process dict in `app/config.py`, 5 min TTL, 512 entries.
   `publishedAfter` is bucketed to the UTC day so keys are stable across seconds.
 
@@ -40,3 +45,6 @@ decisions.
 4. DB writes never block the event loop (`run_in_threadpool`) and quota
    bookkeeping never fails the request it accounts for.
 5. Untrusted YouTube data is HTML-escaped before it reaches `innerHTML`.
+6. Transient HTTP failures are retried with backoff; 4xx (bad key, exhausted
+   quota, missing resource) are not. Fan-out scans are concurrency-capped by
+   `MAX_CONCURRENT_SCANS`.
