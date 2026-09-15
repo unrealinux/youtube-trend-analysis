@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api", tags=["trends"])
 async def search_trends(
     keywords: str = Query(..., description="Comma-separated keywords"),
     max_results: int = Query(default=20, ge=1, le=50),
-    order: str = Query(default="viewCount", pattern="relevance|date|viewCount|rating"),
+    order: str = Query(default="viewCount", pattern="relevance|date|viewCount|rating|velocity"),
     time_range: str = Query(default="past_year"),
 ):
     kw_list = [kw.strip() for kw in keywords.split(",") if kw.strip()]
@@ -44,7 +44,7 @@ async def search_trends(
 async def search_shorts(
     keywords: str = Query(..., description="Comma-separated keywords"),
     max_results: int = Query(default=20, ge=1, le=50),
-    order: str = Query(default="viewCount", pattern="relevance|date|viewCount|rating"),
+    order: str = Query(default="viewCount", pattern="relevance|date|viewCount|rating|velocity"),
     time_range: str = Query(default="past_year"),
 ):
     kw_list = [kw.strip() for kw in keywords.split(",") if kw.strip()]
@@ -64,7 +64,7 @@ async def search_shorts(
 async def get_channel_trends(
     channel_id: str = Query(..., description="YouTube Channel ID"),
     max_results: int = Query(default=20, ge=1, le=50),
-    order: str = Query(default="date", pattern="date|viewCount|rating"),
+    order: str = Query(default="date", pattern="date|viewCount|rating|velocity"),
     time_range: str = Query(default="past_year"),
 ):
     if not channel_id or not channel_id.startswith("UC"):

@@ -17,8 +17,14 @@ decisions.
 - **Engagement rate** — `(likes + comments) / views * 100`. Already a percent
   in `ShortsDetailedResult`/batch/hot; `TrendData` exposes raw counts only.
 - **Trend snapshot** — one row in `trend_tracking`. `refresh=true` appends;
-  without it the stored history is served as-is. Direction compares the latest
-  two snapshots: `> +10%` rising, `< -10%` falling, else stable.
+  without it the stored history is served as-is. Measures the **median
+  views/day of recent uploads** (`order=date`, 14-day window), because the
+  cumulative average of a fixed cohort always rises as those videos age. Old
+  rows without a velocity value fall back to `avg_views`. Direction compares the
+  latest two snapshots: `> +10%` rising, `< -10%` falling, else stable.
+- **Velocity (`views_per_day`)** — `view_count / age_days`, age floored at 1
+  day. The only time-normalised signal; `order=velocity` re-ranks the normal
+  candidate pool by it.
 - **Quota** — YouTube Data API v3 units. `search.list` = 100, `videos.list` /
   `channels.list` = 1 each. Only real (non-cache-hit) calls are charged. The
   day bucket uses Pacific Time (`QUOTA_TIMEZONE`), matching YouTube's reset.

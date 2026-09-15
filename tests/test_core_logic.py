@@ -8,6 +8,7 @@ directly (as the older tests do) hides signature and response-shape mistakes.
 import asyncio
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 
 import pytest
 import httpx
@@ -641,3 +642,107 @@ def test_auto_snapshot_loop_is_noop_when_disabled(monkeypatch):
     monkeypatch.setattr(config, "TREND_SNAPSHOT_INTERVAL_HOURS", 0)
     # returns immediately instead of sleeping forever
     run(asyncio.wait_for(services.trend_snapshot_loop(), timeout=1))
+
+
+# ---- Velocity (views/day): the only time-normalised signal ----
+
+def _days_ago(days):
+    return (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_views_per_day_floors_age_at_one_day():
+    recent = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # 2h old: without the floor this would be 12x the views
+    assert services._views_per_day(1000, recent) == 1000.0
+    assert services._views_per_day(1000, _days_ago(10)) == pytest.approx(100.0)
+    assert services._views_per_day(0, "") == 0.0
+    assert services._views_per_day(1000, "not-a-date") == 0.0
+
+
+def test_search_result_reports_avg_views_per_day(monkeypatch, db):
+    vids = [short("a", 100, published=_days_ago(10)),
+            short("b", 300, published=_days_ago(10))]
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP(vids))
+    result = run(services.search_trends_service(["x"], 10, "viewCount", "this_month"))
+    assert result.avg_views_per_day == pytest.approx(20.0)  # (10 + 30) / 2
+    assert all(v.views_per_day > 0 for v in result.videos)
+
+
+def test_velocity_order_reranks_by_views_per_day(monkeypatch, db):
+    """A newer video with fewer total views must outrank an older, bigger one."""
+    old = short("old", 1_000_000, published="2024-01-01T00:00:00Z")
+    new = short("new", 500_000, published=_days_ago(10))
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP([old, new]))
+
+    result = run(services.search_trends_service(["x"], 10, "velocity", "past_year"))
+    assert [v.video_id for v in result.videos] == ["new", "old"]
+    assert result.videos[0].views_per_day > result.videos[1].views_per_day
+
+
+def test_velocity_order_is_accepted_by_routes(monkeypatch):
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP([short("a", 100, published=_days_ago(10))]))
+    from fastapi.testclient import TestClient
+    from app.main import app
+    client = TestClient(app)
+    for path, params in [("/api/trends/search", {"keywords": "ai"}),
+                         ("/api/trends/shorts/search", {"keywords": "ai"}),
+                         ("/api/trends/channel", {"channel_id": "UCabc"})]:
+        resp = client.get(path, params={**params, "order": "velocity", "time_range": "this_month"})
+        assert resp.status_code == 200, f"{path} -> {resp.status_code}: {resp.text[:120]}"
+
+
+# ---- Trend snapshots record velocity, not cumulative views ----
+
+def test_snapshot_records_median_velocity_from_recent_uploads(monkeypatch, db):
+    vids = [short("a", 100, published=_days_ago(10)),   # 10/day
+            short("b", 200, published=_days_ago(10)),   # 20/day
+            short("c", 300, published=_days_ago(10))]   # 30/day
+    fake = FakeHTTP(vids)
+    monkeypatch.setattr(services, "fetch_json", fake)
+
+    run(services.trend_tracking_service("AI", 30, refresh=True))
+
+    snaps = db.get_trend_snapshots("AI", 30)
+    assert snaps[0].views_per_day == pytest.approx(20.0)  # median
+    # the scan must target recent uploads, not the all-time most-viewed cohort
+    assert fake.search_calls[0][1]["order"] == "date"
+
+
+def test_trend_direction_prefers_velocity_over_flat_avg_views(db):
+    # cumulative avg falls, but the keyword is actually getting hotter
+    db.save_trend_snapshot("AI", 1000.0, 1, 1.0, views_per_day=100.0)
+    db.save_trend_snapshot("AI", 900.0, 1, 1.0, views_per_day=300.0)
+
+    res = run(services.trend_tracking_service("AI", 30, refresh=False))
+    assert res.trend_direction == "rising"
+    assert res.latest_change.metric == "views_per_day"
+    assert res.latest_change.change_pct == pytest.approx(200.0)
+
+
+def test_trend_direction_falls_back_to_avg_views_for_legacy_rows(db):
+    db.save_trend_snapshot("AI", 100.0, 1, 1.0)  # no velocity recorded
+    db.save_trend_snapshot("AI", 500.0, 1, 1.0)
+
+    res = run(services.trend_tracking_service("AI", 30, refresh=False))
+    assert res.trend_direction == "rising"
+    assert res.latest_change.metric == "avg_views"
+
+
+# ---- Legacy DBs get the velocity column added ----
+
+def test_init_db_migrates_old_trend_tracking_table(tmp_path, monkeypatch):
+    import sqlite3
+    import app.database as database
+    db_path = tmp_path / "old.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE trend_tracking (id INTEGER PRIMARY KEY, keyword TEXT, "
+        "avg_views REAL, total_videos INTEGER, engagement_rate REAL, recorded_at DATETIME)"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(database, "DATABASE_PATH", str(db_path))
+    database.init_db()
+    cols = {row[1] for row in database.get_db().execute("PRAGMA table_info(trend_tracking)")}
+    assert "views_per_day" in cols

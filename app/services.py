@@ -203,6 +203,46 @@ def _is_shorts_duration(duration: str) -> bool:
     return 0 < _parse_duration_seconds(duration) <= SHORTS_MAX_DURATION_SEC
 
 
+# YouTube search has no velocity ordering, so `velocity` maps to the same
+# candidate pool and is re-ranked locally by views/day.
+_YOUTUBE_ORDER_FOR = {"velocity": "viewCount"}
+
+
+def _views_per_day(view_count: int, published_at: str) -> float:
+    """Average views/day since publish, with the age floored at one day.
+
+    The floor stops a video published minutes ago from producing an absurd rate
+    (and a divide-by-zero); it understates the first 24h, which is an acceptable
+    trade for comparing videos of different ages. 0 when the date is unusable.
+    """
+    if not published_at:
+        return 0.0
+    try:
+        published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return 0.0
+    if published.tzinfo is None:
+        published = published.replace(tzinfo=timezone.utc)
+    age_days = (datetime.now(timezone.utc) - published).total_seconds() / 86400
+    return round(view_count / max(age_days, 1.0), 2)
+
+
+def _median(values: List[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def _order_videos(videos: List[VideoInfo], order: str) -> List[VideoInfo]:
+    if order == "velocity":
+        return sorted(videos, key=lambda v: v.views_per_day, reverse=True)
+    return videos
+
+
 def analyze_posting_hours(videos: List[VideoInfo]) -> List[str]:
     hour_stats: Dict[int, Dict[str, int]] = {}
     for v in videos:
@@ -233,18 +273,21 @@ def analyze_posting_hours(videos: List[VideoInfo]) -> List[str]:
 def _make_video_info(item: dict) -> VideoInfo:
     snippet = item["snippet"]
     stats = item.get("statistics", {})
+    published_at = snippet.get("publishedAt", "")
+    view_count = int(stats.get("viewCount", 0))
     return VideoInfo(
         video_id=item["id"],
         title=snippet["title"],
         channel_title=snippet["channelTitle"],
-        published_at=snippet.get("publishedAt", ""),
-        view_count=int(stats.get("viewCount", 0)),
+        published_at=published_at,
+        view_count=view_count,
         like_count=int(stats.get("likeCount", 0)),
         comment_count=int(stats.get("commentCount", 0)),
         description=snippet.get("description", "")[:500],
         tags=snippet.get("tags", []),
         thumbnail=snippet["thumbnails"]["high"]["url"] if snippet.get("thumbnails", {}).get("high") else "",
-        url=f"https://www.youtube.com/watch?v={item['id']}"
+        url=f"https://www.youtube.com/watch?v={item['id']}",
+        views_per_day=_views_per_day(view_count, published_at),
     )
 
 
@@ -280,7 +323,7 @@ async def _collect_shorts(
         "part": "snippet",
         "q": query,
         "maxResults": max_results,
-        "order": order,
+        "order": _YOUTUBE_ORDER_FOR.get(order, order),
         "type": "video",
         "publishedAfter": _published_after(days),
     }
@@ -291,18 +334,19 @@ async def _collect_shorts(
 
     stats_data = await _fetch_video_with_duration(api_key, video_ids)
 
-    videos: List[VideoInfo] = []
     tags: List[str] = []
-    durations: List[int] = []
+    pairs: List[tuple] = []
     for item in stats_data.get("items", []):
         duration = item.get("contentDetails", {}).get("duration", "")
         if not _is_shorts_duration(duration):
             continue
         vid = _make_video_info(item)
-        videos.append(vid)
         tags.extend(vid.tags)
-        durations.append(_parse_duration_seconds(duration))
-    return videos, tags, durations
+        pairs.append((vid, _parse_duration_seconds(duration)))
+    # Sort video+duration together so they stay aligned for the caller.
+    if order == "velocity":
+        pairs.sort(key=lambda p: p[0].views_per_day, reverse=True)
+    return [p[0] for p in pairs], tags, [p[1] for p in pairs]
 
 
 # ---- Core search logic ----
@@ -334,6 +378,8 @@ async def fetch_trending_videos(api_key: str, params: dict) -> TrendData:
 
     top_keywords = [kw for kw, _ in Counter(all_tags).most_common(20)]
     avg_views = total_views / len(videos) if videos else 0
+    velocities = [v.views_per_day for v in videos if v.views_per_day > 0]
+    avg_views_per_day = sum(velocities) / len(velocities) if velocities else 0.0
 
     # ponytail: naive density estimate. Dividing by a 1-day span turns a single
     # publish day into "600 uploads/month", so the span is floored at a week —
@@ -353,6 +399,7 @@ async def fetch_trending_videos(api_key: str, params: dict) -> TrendData:
         videos=videos,
         total_count=len(videos),
         avg_views=round(avg_views, 2),
+        avg_views_per_day=round(avg_views_per_day, 2),
         top_keywords=top_keywords,
         upload_frequency=upload_frequency
     )
@@ -368,11 +415,12 @@ async def search_trends_service(keywords: List[str], max_results: int, order: st
         "part": "snippet",
         "q": " ".join(keywords),
         "maxResults": max_results,
-        "order": order,
+        "order": _YOUTUBE_ORDER_FOR.get(order, order),
         "type": "video",
         "publishedAfter": _published_after(days)
     }
     result = await fetch_trending_videos(config.YOUTUBE_API_KEY, params)
+    result.videos = _order_videos(result.videos, order)
     await save_search_history_async(keywords, result.total_count)
     logger.info(f"Search completed: {keywords} -> {result.total_count} results")
     return result
@@ -387,11 +435,12 @@ async def channel_trends_service(channel_id: str, max_results: int, order: str, 
         "part": "snippet",
         "channelId": channel_id,
         "maxResults": max_results,
-        "order": order,
+        "order": _YOUTUBE_ORDER_FOR.get(order, order),
         "type": "video",
         "publishedAfter": _published_after(days)
     }
     result = await fetch_trending_videos(config.YOUTUBE_API_KEY, params)
+    result.videos = _order_videos(result.videos, order)
     logger.info(f"Channel search: {channel_id} -> {result.total_count} results")
     return result
 
@@ -742,7 +791,8 @@ async def channel_insights_service(channel_id: str, max_results: int, time_range
             video_id=item["id"], title=snippet["title"], published_at=pub,
             view_count=views, like_count=likes, comment_count=comments,
             duration_sec=secs,
-            thumbnail=snippet["thumbnails"]["high"]["url"] if snippet.get("thumbnails", {}).get("high") else ""
+            thumbnail=snippet["thumbnails"]["high"]["url"] if snippet.get("thumbnails", {}).get("high") else "",
+            views_per_day=_views_per_day(views, pub),
         ))
         total_views += views
         total_likes += likes
@@ -834,14 +884,22 @@ async def compare_searches_service(query1: str, query2: str, time_range: str = "
 
 
 async def _snapshot_shorts_keyword(keyword: str) -> None:
-    """Scan a keyword's Shorts once and append a trend_tracking snapshot.
+    """Scan a keyword's recent Shorts once and append a trend_tracking snapshot.
 
-    Snapshotting every refresh is the point of trend tracking: the growth curve
-    is the difference between successive snapshots.
+    Snapshots the *velocity* (median views/day) of recent content. The old
+    version recorded the cumulative average of a top-N cohort, which always
+    rose because the same videos keep gaining views — so every keyword looked
+    like it was trending up. `order=date` + a short window keeps the sample to
+    fresh uploads.
     """
     if not config.YOUTUBE_API_KEY:
         raise HTTPException(status_code=503, detail="YouTube API Key not configured")
-    vids, _, _ = await _collect_shorts(config.YOUTUBE_API_KEY, keyword + " #shorts", 20, 30)
+    # ponytail: velocity still decays as the sampled videos age, so consecutive
+    # snapshots carry a mild downward drift. An exact measure needs per-video
+    # cohort deltas (a separate snapshot table); upgrade if the drift matters.
+    vids, _, _ = await _collect_shorts(
+        config.YOUTUBE_API_KEY, keyword + " #shorts", 20, 14, "date"
+    )
     if not vids:
         raise HTTPException(status_code=404, detail="No Shorts found")
     total_views = sum(v.view_count for v in vids)
@@ -849,7 +907,11 @@ async def _snapshot_shorts_keyword(keyword: str) -> None:
     total_comments = sum(v.comment_count for v in vids)
     engagement_rate = (total_likes + total_comments) / max(total_views, 1) * 100
     await save_trend_snapshot_async(
-        keyword, round(total_views / len(vids), 2), len(vids), round(engagement_rate, 2)
+        keyword,
+        round(total_views / len(vids), 2),
+        len(vids),
+        round(engagement_rate, 2),
+        _median([v.views_per_day for v in vids]),
     )
 
 
@@ -912,17 +974,24 @@ async def trend_tracking_service(keyword: str, limit: int, refresh: bool = False
     if len(sorted_snapshots) >= 2:
         previous = sorted_snapshots[-2]
         current = sorted_snapshots[-1]
-        change_pct = ((current.avg_views - previous.avg_views) / max(previous.avg_views, 1)) * 100
+        # Velocity is the honest signal: cumulative avg_views rises just because
+        # the same videos age. Fall back to avg_views for snapshots written
+        # before velocity was recorded (views_per_day defaults to 0).
+        if previous.views_per_day > 0 and current.views_per_day > 0:
+            metric, prev_value, cur_value = "views_per_day", previous.views_per_day, current.views_per_day
+        else:
+            metric, prev_value, cur_value = "avg_views", previous.avg_views, current.avg_views
+        change_pct = ((cur_value - prev_value) / max(prev_value, 1)) * 100
         if change_pct > 10:
             trend_direction = "rising"
-            latest_change = TrendChange(keyword=keyword, direction="rising", change_pct=round(change_pct, 2),
-                                         current_avg_views=current.avg_views, previous_avg_views=previous.avg_views,
-                                         change_timestamp=current.recorded_at)
         elif change_pct < -10:
             trend_direction = "falling"
-            latest_change = TrendChange(keyword=keyword, direction="falling", change_pct=round(change_pct, 2),
-                                         current_avg_views=current.avg_views, previous_avg_views=previous.avg_views,
-                                         change_timestamp=current.recorded_at)
+        if trend_direction != "stable":
+            latest_change = TrendChange(
+                keyword=keyword, direction=trend_direction, change_pct=round(change_pct, 2),
+                metric=metric, current_value=cur_value, previous_value=prev_value,
+                change_timestamp=current.recorded_at,
+            )
     return TrendTrackingResult(keyword=keyword, snapshots=snapshots, latest_change=latest_change, trend_direction=trend_direction)
 
 

@@ -14,12 +14,16 @@ class VideoInfo(BaseModel):
     tags: List[str]
     thumbnail: str
     url: str = ""
+    # views/day since publish: the only time-normalised signal, so a 2-day-old
+    # hit can outrank a 30-day-old one with more cumulative views.
+    views_per_day: float = 0.0
 
 
 class TrendData(BaseModel):
     videos: List[VideoInfo]
     total_count: int
     avg_views: float
+    avg_views_per_day: float = 0.0
     top_keywords: List[str]
     upload_frequency: float = 0.0
 
@@ -28,6 +32,7 @@ class ShortsData(BaseModel):
     videos: List[VideoInfo]
     total_count: int
     avg_views: float
+    avg_views_per_day: float = 0.0
     top_keywords: List[str]
     upload_frequency: float = 0.0
 
@@ -49,6 +54,7 @@ class TrendSnapshot(BaseModel):
     avg_views: float
     total_videos: int
     engagement_rate: float = 0.0
+    views_per_day: float = 0.0
     recorded_at: str
 
 
@@ -56,8 +62,9 @@ class TrendChange(BaseModel):
     keyword: str
     direction: str  # "rising", "falling", "stable"
     change_pct: float
-    current_avg_views: float
-    previous_avg_views: float
+    metric: str = "views_per_day"  # which metric the values below are for
+    current_value: float
+    previous_value: float
     change_timestamp: str
 
 
@@ -170,6 +177,7 @@ class ChannelInsightVideo(BaseModel):
     comment_count: int
     duration_sec: int
     thumbnail: str
+    views_per_day: float = 0.0
 
 
 class ChannelInsightsResult(BaseModel):

@@ -79,9 +79,14 @@ def init_db() -> None:
             avg_views REAL NOT NULL,
             total_videos INTEGER NOT NULL,
             engagement_rate REAL DEFAULT 0,
+            views_per_day REAL DEFAULT 0,
             recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # Additive migration: DBs created before velocity tracking lack the column.
+    existing = {row["name"] for row in cursor.execute("PRAGMA table_info(trend_tracking)")}
+    if "views_per_day" not in existing:
+        cursor.execute("ALTER TABLE trend_tracking ADD COLUMN views_per_day REAL DEFAULT 0")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_keyword ON trend_tracking(keyword)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_recorded_at ON trend_tracking(recorded_at)")
     conn.commit()
@@ -123,12 +128,16 @@ def clear_search_history() -> int:
     return count
 
 
-def save_trend_snapshot(keyword: str, avg_views: float, total_videos: int, engagement_rate: float = 0.0) -> None:
+def save_trend_snapshot(
+    keyword: str, avg_views: float, total_videos: int,
+    engagement_rate: float = 0.0, views_per_day: float = 0.0,
+) -> None:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO trend_tracking (keyword, avg_views, total_videos, engagement_rate) VALUES (?, ?, ?, ?)",
-        (keyword, avg_views, total_videos, engagement_rate)
+        "INSERT INTO trend_tracking (keyword, avg_views, total_videos, engagement_rate, views_per_day) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (keyword, avg_views, total_videos, engagement_rate, views_per_day)
     )
     conn.commit()
     conn.close()
@@ -142,7 +151,7 @@ def get_trend_snapshots(keyword: str, limit: int = 30) -> List[TrendSnapshot]:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT keyword, avg_views, total_videos, engagement_rate, recorded_at FROM trend_tracking WHERE keyword = ? ORDER BY recorded_at DESC, id DESC LIMIT ?",
+        "SELECT keyword, avg_views, total_videos, engagement_rate, views_per_day, recorded_at FROM trend_tracking WHERE keyword = ? ORDER BY recorded_at DESC, id DESC LIMIT ?",
         (keyword, limit)
     )
     rows = cursor.fetchall()
@@ -225,9 +234,12 @@ async def save_search_history_async(keywords: List[str], result_count: int) -> N
 
 
 async def save_trend_snapshot_async(
-    keyword: str, avg_views: float, total_videos: int, engagement_rate: float = 0.0
+    keyword: str, avg_views: float, total_videos: int,
+    engagement_rate: float = 0.0, views_per_day: float = 0.0,
 ) -> None:
-    await run_in_threadpool(save_trend_snapshot, keyword, avg_views, total_videos, engagement_rate)
+    await run_in_threadpool(
+        save_trend_snapshot, keyword, avg_views, total_videos, engagement_rate, views_per_day
+    )
 
 
 async def record_quota_usage_async(units: int) -> None:
