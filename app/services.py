@@ -75,17 +75,22 @@ def _set_cached(key: str, data: dict) -> None:
 
 # ---- YouTube API client ----
 
-async def fetch_json(client: httpx.AsyncClient, url: str, params: dict) -> dict:
+async def fetch_json(client: httpx.AsyncClient, url: str, params: dict, api_key: str) -> dict:
     """GET a YouTube endpoint, retrying transient failures with backoff.
 
     400/403/404 map straight to an HTTPException — retrying a malformed request,
     an exhausted quota, or a missing resource only wastes time. Connection
     errors and 5xx are retried.
+
+    The key travels in the X-goog-api-key header, not the ?key= query param:
+    httpx logs full request URLs at INFO, so a query-param key leaks in plain
+    text into server logs (and any proxy/referrer along the way).
     """
     last_error: Optional[Exception] = None
     for attempt in range(_RETRY_ATTEMPTS):
         try:
-            resp = await client.get(url, params=params, timeout=config.REQUEST_TIMEOUT)
+            resp = await client.get(url, params=params, headers={"X-goog-api-key": api_key},
+                                    timeout=config.REQUEST_TIMEOUT)
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as e:
@@ -119,7 +124,7 @@ async def _fetch_search(api_key: str, params: dict) -> dict:
     if config.PROXY_URL:
         client_kwargs["proxy"] = config.PROXY_URL
     async with httpx.AsyncClient(**client_kwargs) as client:
-        data = await fetch_json(client, f"{config.YOUTUBE_BASE_URL}/search", {**params, "key": api_key})
+        data = await fetch_json(client, f"{config.YOUTUBE_BASE_URL}/search", params, api_key)
         await record_quota_usage_async(QUOTA_COST_SEARCH)
         _set_cached(cache_key, data)
         return data
@@ -137,8 +142,7 @@ async def _fetch_videos(api_key: str, video_ids: list, parts: str) -> dict:
         data = await fetch_json(client, f"{config.YOUTUBE_BASE_URL}/videos", {
             "part": parts,
             "id": ",".join(video_ids),
-            "key": api_key
-        })
+        }, api_key)
         await record_quota_usage_async(QUOTA_COST_VIDEOS)
         _set_cached(cache_key, data)
         return data
@@ -167,8 +171,7 @@ async def _fetch_channels(api_key: str, channel_ids: list) -> dict:
         data = await fetch_json(client, f"{config.YOUTUBE_BASE_URL}/channels", {
             "part": "snippet,statistics",
             "id": ",".join(channel_ids),
-            "key": api_key,
-        })
+        }, api_key)
         await record_quota_usage_async(QUOTA_COST_VIDEOS)
         _set_cached(cache_key, data)
         return data

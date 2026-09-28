@@ -38,7 +38,7 @@ class FakeHTTP:
         self.videos = videos
         self.calls = []
 
-    async def __call__(self, client, url, params):
+    async def __call__(self, client, url, params, api_key):
         self.calls.append((url, params))
         if url.endswith("/search"):
             return {"items": [{"id": {"videoId": v["id"]}} for v in self.videos]}
@@ -444,7 +444,7 @@ class ChannelHTTP:
     def __init__(self):
         self.calls = []
 
-    async def __call__(self, client, url, params):
+    async def __call__(self, client, url, params, api_key):
         self.calls.append((url, params))
         if url.endswith("/search"):
             return {"items": [
@@ -547,10 +547,25 @@ class FlakyClient:
         return _Resp({"ok": True})
 
 
+def test_fetch_json_sends_key_in_header_not_query(monkeypatch):
+    """The key must not ride in the URL: httpx logs full URLs, leaking it."""
+    seen = {}
+
+    class CaptureClient:
+        async def get(self, url, **kwargs):
+            seen.update(kwargs)
+            return _Resp({"ok": True})
+
+    monkeypatch.setattr(services, "_RETRY_BASE_DELAY", 0)
+    run(services.fetch_json(CaptureClient(), "http://x", {"part": "snippet"}, "secret"))
+    assert "key" not in seen["params"]
+    assert seen["headers"]["X-goog-api-key"] == "secret"
+
+
 def test_fetch_json_retries_connection_errors(monkeypatch):
     monkeypatch.setattr(services, "_RETRY_BASE_DELAY", 0)
     client = FlakyClient(failures=2)
-    assert run(services.fetch_json(client, "http://x", {})) == {"ok": True}
+    assert run(services.fetch_json(client, "http://x", {}, "k")) == {"ok": True}
     assert client.calls == 3
 
 
@@ -559,7 +574,7 @@ def test_fetch_json_gives_up_as_504_after_max_attempts(monkeypatch):
     monkeypatch.setattr(services, "_RETRY_BASE_DELAY", 0)
     client = FlakyClient(failures=99)
     with pytest.raises(HTTPException) as exc:
-        run(services.fetch_json(client, "http://x", {}))
+        run(services.fetch_json(client, "http://x", {}, "k"))
     assert exc.value.status_code == 504
     assert client.calls == services._RETRY_ATTEMPTS
 
@@ -567,7 +582,7 @@ def test_fetch_json_gives_up_as_504_after_max_attempts(monkeypatch):
 def test_fetch_json_retries_5xx(monkeypatch):
     monkeypatch.setattr(services, "_RETRY_BASE_DELAY", 0)
     client = FlakyClient(failures=1, status=503)
-    assert run(services.fetch_json(client, "http://x", {})) == {"ok": True}
+    assert run(services.fetch_json(client, "http://x", {}, "k")) == {"ok": True}
     assert client.calls == 2
 
 
@@ -577,7 +592,7 @@ def test_fetch_json_does_not_retry_403(monkeypatch):
     monkeypatch.setattr(services, "_RETRY_BASE_DELAY", 0)
     client = FlakyClient(failures=99, status=403)
     with pytest.raises(HTTPException) as exc:
-        run(services.fetch_json(client, "http://x", {}))
+        run(services.fetch_json(client, "http://x", {}, "k"))
     assert exc.value.status_code == 403
     assert client.calls == 1
 
