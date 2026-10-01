@@ -1,0 +1,4 @@
+# .scratch is local working state (see docs/agents/issue-tracker.md).
+# Keep the directory in the repo, keep its contents out of commits.
+*
+!.gitignore
