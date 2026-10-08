@@ -256,6 +256,28 @@ _DISCOVER_STOPWORDS = {
     "youtube", "video", "videos", "热门", "我要上热门", "上热门", "推荐", "剪辑",
 }
 
+# Tags so generic that every viral Short carries them, so they can never name a
+# niche. Kept out of _DISCOVER_STOPWORDS on purpose: that set also filters title
+# features, where a genre word like "comedy" is still a real signal.
+_GENERIC_TAGS = {
+    "youtubeshorts", "youtube shorts", "shortsfeed", "shortsvideo", "shortvideo",
+    "viralshorts", "viralvideo", "trendingshorts", "subscribe", "like", "follow",
+    "reels", "tiktok", "instagram", "facebook", "capcut",
+    "comedy", "funny", "animation", "animated", "entertainment", "vlog",
+    "music", "dance", "gaming", "movie", "movies", "film", "trailer",
+    "搞笑", "娱乐", "动画", "音乐", "舞蹈", "游戏", "影视",
+}
+
+
+def _is_generic_tag(tag_lower: str) -> bool:
+    """True for platform/genre tags, and for multi-word tags made only of them."""
+    if tag_lower in _DISCOVER_STOPWORDS or tag_lower in _GENERIC_TAGS:
+        return True
+    parts = tag_lower.split()
+    return len(parts) > 1 and all(
+        p in _DISCOVER_STOPWORDS or p in _GENERIC_TAGS for p in parts
+    )
+
 
 def _candidate_keywords(videos: List[VideoInfo], seed: str, limit: int) -> List[tuple]:
     """Rank keywords co-occurring with the seed, highest first.
@@ -264,13 +286,16 @@ def _candidate_keywords(videos: List[VideoInfo], seed: str, limit: int) -> List[
     seed still returns something instead of an empty list.
     """
     counts: Counter = Counter()
+    display: dict = {}
     for video in videos:
         for tag in list(video.tags) + [m.group(1) for m in _HASHTAG_RE.finditer(video.title)]:
             tag = tag.strip()
-            if 2 <= len(tag) <= 40 and tag.lower() not in _DISCOVER_STOPWORDS:
-                counts[tag] += 1
+            key = tag.lower()
+            if 2 <= len(tag) <= 40 and not _is_generic_tag(key):
+                counts[key] += 1
+                display.setdefault(key, tag)
     seed_norm = seed.strip().lower()
-    ranked = [(kw, n) for kw, n in counts.most_common() if kw.lower() != seed_norm]
+    ranked = [(display[kw], n) for kw, n in counts.most_common() if kw != seed_norm]
     repeated = [(kw, n) for kw, n in ranked if n >= 2]
     return (repeated or ranked)[:limit]
 

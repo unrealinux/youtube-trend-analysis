@@ -809,6 +809,28 @@ def test_discover_falls_back_to_singletons_for_niche_seed():
     assert services._candidate_keywords(vids, "seed", 5) == [("only-one", 1)]
 
 
+def test_discover_drops_generic_platform_tags():
+    """Generic tags name no niche, so they must not crowd out specific ones."""
+    vids = [services._make_video_info(
+        short(f"v{i}", 100, tags=("comedy", "youtubeshorts", "old-photos-ai")))
+        for i in range(3)]
+    assert services._candidate_keywords(vids, "seed", 5) == [("old-photos-ai", 3)]
+
+
+def test_discover_drops_multiword_generic_tags():
+    """A tag built only from generic words ("funny shorts") is still generic."""
+    vids = [services._make_video_info(
+        short(f"v{i}", 100, tags=("funny shorts", "old-photos-ai")))
+        for i in range(2)]
+    assert services._candidate_keywords(vids, "seed", 5) == [("old-photos-ai", 2)]
+
+
+def test_discover_dedupes_case_variants():
+    """"AI" and "ai" are one candidate, shown in the casing seen first."""
+    vids = [services._make_video_info(short("a", 100, tags=("AI", "ai")))]
+    assert services._candidate_keywords(vids, "seed", 5) == [("AI", 2)]
+
+
 def test_discover_requires_seed_videos(monkeypatch):
     from fastapi import HTTPException
     monkeypatch.setattr(services, "fetch_json", FakeHTTP([]))

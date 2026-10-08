@@ -29,6 +29,9 @@ decisions.
   and title `#hashtags` for co-occurring candidates. No segmentation dependency.
   `scan=true` then verifies each candidate with a normal Shorts scan so the row
   carries velocity and competition; `scan=false` only ranks by co-occurrence.
+  Generic platform/genre tags (`_GENERIC_TAGS`, incl. multi-word combos) are
+  dropped and case variants collapse to one candidate, so results name a niche
+  rather than the platform.
 - **Quota** — YouTube Data API v3 units. `search.list` = 100, `videos.list` /
   `channels.list` = 1 each. Only real (non-cache-hit) calls are charged. The
   day bucket uses Pacific Time (`QUOTA_TIMEZONE`), matching YouTube's reset.
