@@ -766,16 +766,23 @@ async def feature_analysis_service(keyword: str, max_results: int, time_range: s
 
     durations.sort(reverse=True)
 
-    # Engagement by tag
-    tag_engagement: Dict[str, List[int]] = {}
+    # Engagement by tag: rank by real (likes + comments) / views, not by view
+    # count, and require a tag on at least two videos so one viral outlier's tag
+    # cloud cannot fill the list. Generic tags are dropped and case variants
+    # collapse. Falls back to singletons when nothing repeats.
+    tag_rates: Dict[str, List[float]] = {}
+    display: Dict[str, str] = {}
     for v in videos:
-        total_engagement = v.like_count + v.comment_count
-        for tag in v.tags:
-            tag_engagement.setdefault(tag, []).append(v.view_count)
-    top_engagement_keywords = [kw for kw, _ in sorted(
-        ((tag, sum(views)/len(views)) for tag, views in tag_engagement.items()),
-        key=lambda x: x[1], reverse=True
-    )][:8]
+        rate = (v.like_count + v.comment_count) / max(v.view_count, 1)
+        for raw in v.tags:
+            tag = raw.strip()
+            key = tag.lower()
+            if not _is_generic_tag(key):
+                tag_rates.setdefault(key, []).append(rate)
+                display.setdefault(key, tag)
+    repeated = [(key, sum(rates) / len(rates)) for key, rates in tag_rates.items() if len(rates) >= 2]
+    pool = repeated or [(key, sum(rates) / len(rates)) for key, rates in tag_rates.items()]
+    top_engagement_keywords = [display[key] for key, _ in sorted(pool, key=lambda x: x[1], reverse=True)][:8]
 
     # Success score
     avg_views = total_views / len(videos)

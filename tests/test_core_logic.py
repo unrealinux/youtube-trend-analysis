@@ -879,3 +879,17 @@ def test_feature_analysis_returns_real_title_patterns(monkeypatch):
 
     assert any("平均" in p for p in res.title_patterns)
     assert any("家常" in p for p in res.title_patterns), res.title_patterns
+
+
+def test_feature_analysis_ranks_tags_by_engagement_not_views(monkeypatch):
+    """A viral outlier's tags must not fill the list; rank by real engagement."""
+    vids = (
+        [short(f"normal{i}", 1000, tags=("金曲", "shorts"), title="经典") for i in range(2)]
+        + [short("viral", 1_000_000, tags=("roblox", "遊戲"), title="爆款")]
+    )
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP(vids))
+    res = run(services.feature_analysis_service("kw", 20, "this_month"))
+
+    assert res.top_engagement_keywords[0] == "金曲"
+    assert "roblox" not in res.top_engagement_keywords
+    assert "shorts" not in res.top_engagement_keywords
