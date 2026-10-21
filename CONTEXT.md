@@ -33,9 +33,10 @@ decisions.
   dropped and case variants collapse to one candidate, so results name a niche
   rather than the platform. Each scanned candidate carries a rule-based
   **verdict**: `避开` when one video owns ≥50% of the sample's views or
-  engagement <0.8%; `值得做` when velocity beats the batch median, engagement
-  ≥1.5%, and the head holds <35%; else `观望`. Thresholds are descriptive,
-  not market truth.
+  engagement <0.8%; `过宽` when velocity is ≥10× the batch median (a category,
+  not a niche — e.g. "AI" vs "AI编程"); `值得做` when velocity beats the batch
+  median, engagement ≥1.5%, and the head holds <35%; else `观望`. Thresholds
+  are descriptive, not market truth.
 - **Quota** — YouTube Data API v3 units. `search.list` = 100, `videos.list` /
   `channels.list` = 1 each. Only real (non-cache-hit) calls are charged. The
   day bucket uses Pacific Time (`QUOTA_TIMEZONE`), matching YouTube's reset.

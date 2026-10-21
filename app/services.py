@@ -673,6 +673,14 @@ def _niche_verdict(c: DiscoveryCandidate, median_velocity: float) -> tuple:
         blockers.append(f"互动率仅 {c.engagement_rate:.2f}%")
     if blockers:
         return "避开", blockers
+    # Velocity far above the batch is a category, not a niche: "AI" dwarfs
+    # "AI编程" by 50x because it is the whole category. Nobody can make videos
+    # about a category, so flag it for a modifier instead of promoting it.
+    if median_velocity > 0 and c.avg_views_per_day >= median_velocity * 10:
+        return "过宽", [
+            f"播放/天 {c.avg_views_per_day:,.0f} 是中位 {median_velocity:,.0f} 的 "
+            f"{c.avg_views_per_day / median_velocity:.0f} 倍，更像品类而非赛道"
+        ]
     if (c.avg_views_per_day >= median_velocity and c.engagement_rate >= 1.5
             and c.top_share < 0.35):
         return "值得做", [

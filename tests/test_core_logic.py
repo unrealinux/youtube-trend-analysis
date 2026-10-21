@@ -859,6 +859,19 @@ def test_niche_verdict_flags_dominated_and_weak_niches():
         cand(avg_views_per_day=100, engagement_rate=2.0, top_share=0.2), 2000)[0] == "观望"
 
 
+def test_niche_verdict_flags_too_broad_categories():
+    """A term 10x the batch median is the whole category, not a niche."""
+    from app.models import DiscoveryCandidate
+
+    def cand(**kw):
+        return DiscoveryCandidate(keyword="k", occurrences=2, scanned=True, **kw)
+
+    assert services._niche_verdict(
+        cand(avg_views_per_day=50_000, engagement_rate=2.0, top_share=0.2), 2000)[0] == "过宽"
+    assert services._niche_verdict(
+        cand(avg_views_per_day=10_000, engagement_rate=2.0, top_share=0.2), 2000)[0] == "值得做"
+
+
 def test_scan_metrics_reports_top_video_share(monkeypatch):
     """top_share exposes whether one video dominates the sample."""
     vids = [short("a", 800, tags=("x",)), short("b", 100, tags=("x",)),
