@@ -98,6 +98,10 @@ class KeywordResult(BaseModel):
     top_keywords: List[str]
     avg_views_per_day: float = 0.0
     engagement_rate: float = 0.0
+    # Competition proxy: how much of the sample's total views the single
+    # biggest video holds. High = one head video dominates the niche.
+    top_video_views: int = 0
+    top_share: float = 0.0
 
 
 class DiscoveryCandidate(BaseModel):
@@ -108,6 +112,11 @@ class DiscoveryCandidate(BaseModel):
     avg_views_per_day: float = 0.0
     video_count: int = 0
     engagement_rate: float = 0.0
+    top_video_views: int = 0
+    top_share: float = 0.0
+    # Rule-based read of the row: 值得做 / 观望 / 避开, with plain reasons.
+    verdict: str = ""
+    reasons: List[str] = []
 
 
 class DiscoveryResult(BaseModel):

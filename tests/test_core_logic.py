@@ -831,6 +831,44 @@ def test_discover_dedupes_case_variants():
     assert services._candidate_keywords(vids, "seed", 5) == [("AI", 2)]
 
 
+def test_discover_attaches_niche_verdict(monkeypatch):
+    vids = [short(f"v{i}", 1000 * (i + 1), tags=("python",), published=_days_ago(10))
+            for i in range(3)]
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP(vids))
+    res = run(services.discover_keywords_service("ai", 3, scan=True, time_range="this_month"))
+    assert res.candidates[0].verdict in {"值得做", "观望", "避开"}
+    assert res.candidates[0].reasons
+    assert 0.0 <= res.candidates[0].top_share <= 1.0
+
+
+def test_niche_verdict_flags_dominated_and_weak_niches():
+    from app.models import DiscoveryCandidate
+
+    def cand(**kw):
+        return DiscoveryCandidate(keyword="k", occurrences=2, scanned=True, **kw)
+
+    assert services._niche_verdict(
+        cand(avg_views_per_day=5000, engagement_rate=2.0, top_share=0.2), 2000)[0] == "值得做"
+    assert services._niche_verdict(
+        cand(avg_views_per_day=9000, engagement_rate=2.0, top_share=0.7), 2000)[0] == "避开"
+    assert services._niche_verdict(
+        cand(avg_views_per_day=9000, engagement_rate=0.4, top_share=0.2), 2000)[0] == "避开"
+    assert services._niche_verdict(
+        cand(avg_views_per_day=5000, engagement_rate=2.0, top_share=0.4), 2000)[0] == "观望"
+    assert services._niche_verdict(
+        cand(avg_views_per_day=100, engagement_rate=2.0, top_share=0.2), 2000)[0] == "观望"
+
+
+def test_scan_metrics_reports_top_video_share(monkeypatch):
+    """top_share exposes whether one video dominates the sample."""
+    vids = [short("a", 800, tags=("x",)), short("b", 100, tags=("x",)),
+            short("c", 100, tags=("x",))]
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP(vids))
+    m = run(services._scan_keyword_metrics("kw", 30))
+    assert m.top_video_views == 800
+    assert m.top_share == 0.8
+
+
 def test_discover_requires_seed_videos(monkeypatch):
     from fastapi import HTTPException
     monkeypatch.setattr(services, "fetch_json", FakeHTTP([]))

@@ -621,6 +621,7 @@ async def _scan_keyword_metrics(keyword: str, days: int, max_results: int = 20) 
     total_views = sum(v.view_count for v in vids)
     total_likes = sum(v.like_count for v in vids)
     total_comments = sum(v.comment_count for v in vids)
+    top_video_views = max((v.view_count for v in vids), default=0)
     engagement_rate = (total_likes + total_comments) / max(total_views, 1) * 100
     velocities = [v.views_per_day for v in vids if v.views_per_day > 0]
     return KeywordResult(
@@ -631,6 +632,8 @@ async def _scan_keyword_metrics(keyword: str, days: int, max_results: int = 20) 
         video_count=len(vids),
         top_keywords=[kw for kw, _ in Counter(all_tags).most_common(10)],
         engagement_rate=round(engagement_rate, 2),
+        top_video_views=top_video_views,
+        top_share=round(top_video_views / max(total_views, 1), 2),
     )
 
 
@@ -653,6 +656,36 @@ async def batch_scan_service(keywords: List[str], max_results: int, time_range: 
     results = [r for r in scanned if r is not None]
     results.sort(key=lambda x: x.avg_views, reverse=True)
     return BatchScanResult(keywords=results, sorted_by="avg_views", scanned_at=datetime.now(timezone.utc).isoformat())
+
+
+def _niche_verdict(c: DiscoveryCandidate, median_velocity: float) -> tuple:
+    """Rule-based read of one candidate; thresholds are descriptive, not market truth.
+
+    Reject when one video owns >=50% of the sample's views (the "niche" is
+    really one hit) or engagement is below 0.8%. Promote only when velocity
+    beats the batch median, engagement clears 1.5%, and the head is not
+    concentrated (<35%). Everything else is 观望.
+    """
+    blockers = []
+    if c.top_share >= 0.5:
+        blockers.append(f"单条视频占 {c.top_share:.0%} 播放")
+    if c.engagement_rate < 0.8:
+        blockers.append(f"互动率仅 {c.engagement_rate:.2f}%")
+    if blockers:
+        return "避开", blockers
+    if (c.avg_views_per_day >= median_velocity and c.engagement_rate >= 1.5
+            and c.top_share < 0.35):
+        return "值得做", [
+            f"播放/天 {c.avg_views_per_day:,.0f}（中位 {median_velocity:,.0f}）",
+            f"互动率 {c.engagement_rate:.2f}%",
+            f"头部占比 {c.top_share:.0%}",
+        ]
+    reasons = [f"播放/天 {c.avg_views_per_day:,.0f}（中位 {median_velocity:,.0f}）"]
+    if c.engagement_rate < 1.5:
+        reasons.append(f"互动率 {c.engagement_rate:.2f}% 偏低")
+    if c.top_share >= 0.35:
+        reasons.append(f"头部占比 {c.top_share:.0%} 偏高")
+    return "观望", reasons
 
 
 async def discover_keywords_service(seed: str, limit: int, scan: bool, time_range: str) -> DiscoveryResult:
@@ -698,8 +731,13 @@ async def discover_keywords_service(seed: str, limit: int, scan: bool, time_rang
                 avg_views_per_day=m.avg_views_per_day if m else 0.0,
                 video_count=m.video_count if m else 0,
                 engagement_rate=m.engagement_rate if m else 0.0,
+                top_video_views=m.top_video_views if m else 0,
+                top_share=m.top_share if m else 0.0,
             ))
         candidates.sort(key=lambda c: c.avg_views_per_day, reverse=True)
+        median_velocity = sorted(c.avg_views_per_day for c in candidates)[len(candidates) // 2] if candidates else 0.0
+        for c in candidates:
+            c.verdict, c.reasons = _niche_verdict(c, median_velocity)
 
     logger.info(f"Discovery for '{seed}': {len(candidates)} candidates (scan={scan})")
     return DiscoveryResult(
