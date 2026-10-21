@@ -18,6 +18,7 @@ from app.models import (
     DurationBucket, HourlyStats, ViewsQuantile, TitleLengthBreakdown,
     ChannelInsightsResult, ChannelInsightVideo,
     DiscoveryCandidate, DiscoveryResult,
+    ChannelLeaderRow, ChannelLeaderboardResult,
 )
 from app.database import (
     get_trend_snapshots, get_today_quota_used, get_keywords_due_for_snapshot,
@@ -426,6 +427,7 @@ def _make_video_info(item: dict) -> VideoInfo:
         video_id=item["id"],
         title=snippet["title"],
         channel_title=snippet["channelTitle"],
+        channel_id=snippet.get("channelId", ""),
         published_at=published_at,
         view_count=view_count,
         like_count=int(stats.get("likeCount", 0)),
@@ -694,6 +696,61 @@ def _niche_verdict(c: DiscoveryCandidate, median_velocity: float) -> tuple:
     if c.top_share >= 0.35:
         reasons.append(f"头部占比 {c.top_share:.0%} 偏高")
     return "观望", reasons
+
+
+async def channel_leaderboard_service(
+    keyword: str, time_range: str, max_results: int = 30
+) -> ChannelLeaderboardResult:
+    """Aggregate one keyword's Shorts sample by channel.
+
+    Answers the supply-side question the keyword metrics cannot: is this niche
+    shared by many creators, or owned by a few? Reuses the normal Shorts sample,
+    so it costs one search + one videos.list, not one scan per channel.
+    """
+    days = _resolve_days(time_range)
+    if not config.YOUTUBE_API_KEY:
+        raise HTTPException(status_code=503, detail="YouTube API Key not configured")
+    videos, _, _ = await _collect_shorts(
+        config.YOUTUBE_API_KEY, keyword + " #shorts", max_results, days
+    )
+    if not videos:
+        raise HTTPException(status_code=404, detail="No Shorts found")
+
+    total_views = sum(v.view_count for v in videos)
+    groups: Dict[str, List[VideoInfo]] = {}
+    for v in videos:
+        groups.setdefault(v.channel_id or v.channel_title, []).append(v)
+
+    rows = []
+    for vids in groups.values():
+        views = sum(v.view_count for v in vids)
+        velocities = [v.views_per_day for v in vids if v.views_per_day > 0]
+        engagement = sum(v.like_count + v.comment_count for v in vids) / max(views, 1) * 100
+        rows.append(ChannelLeaderRow(
+            channel_id=vids[0].channel_id,
+            channel_title=vids[0].channel_title,
+            video_count=len(vids),
+            total_views=views,
+            avg_views=round(views / len(vids), 2),
+            avg_views_per_day=round(sum(velocities) / len(velocities), 2) if velocities else 0.0,
+            engagement_rate=round(engagement, 2),
+            top_video_views=max(v.view_count for v in vids),
+            view_share=round(views / max(total_views, 1), 2),
+        ))
+    rows.sort(key=lambda r: r.total_views, reverse=True)
+
+    top3_share = round(sum(r.view_share for r in rows[:3]), 2)
+    # Thresholds are descriptive: 3 channels owning most of the views means a
+    # wall, while an even spread means there is still room for a new entrant.
+    concentration = "垄断" if top3_share >= 0.7 else "集中" if top3_share >= 0.45 else "分散"
+    return ChannelLeaderboardResult(
+        keyword=keyword,
+        channels=rows,
+        total_views=total_views,
+        top3_share=top3_share,
+        concentration=concentration,
+        scanned_at=datetime.now(timezone.utc).isoformat(),
+    )
 
 
 async def discover_keywords_service(seed: str, limit: int, scan: bool, time_range: str) -> DiscoveryResult:

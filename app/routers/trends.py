@@ -8,13 +8,14 @@ from app.models import (
     TrendData, ShortsData, ComparisonResult, BatchScanResult,
     HotCategoryResult, FeatureAnalysisResult, ShortsDetailedResult,
     ChannelInsightsResult, TrendTrackingResult, ChannelSearchResult,
-    DiscoveryResult,
+    DiscoveryResult, ChannelLeaderboardResult,
 )
 from app.services import (
     search_trends_service, search_shorts_service, batch_scan_service,
     hot_categories_service, feature_analysis_service, detailed_shorts_service,
     channel_insights_service, compare_searches_service, trend_tracking_service,
     search_channels_service, channel_trends_service, discover_keywords_service,
+    channel_leaderboard_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -215,6 +216,24 @@ async def search_channels(
         raise
     except Exception as e:
         logger.error(f"Channel search error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/channels/leaderboard", response_model=ChannelLeaderboardResult)
+async def channel_leaderboard(
+    keyword: str = Query(..., description="Keyword whose Shorts sample to aggregate by channel"),
+    time_range: str = Query(default="past_year"),
+    max_results: int = Query(default=30, ge=1, le=50),
+):
+    if not keyword:
+        raise HTTPException(status_code=400, detail="Keyword is required")
+    try:
+        result = await channel_leaderboard_service(keyword, time_range, max_results)
+        return result.model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Channel leaderboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

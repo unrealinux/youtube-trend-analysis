@@ -37,6 +37,10 @@ decisions.
   not a niche — e.g. "AI" vs "AI编程"); `值得做` when velocity beats the batch
   median, engagement ≥1.5%, and the head holds <35%; else `观望`. Thresholds
   are descriptive, not market truth.
+- **Channel leaderboard** — aggregates one keyword's Shorts sample by channel
+  and reports `top3_share` plus a concentration label (`垄断` ≥70%, `集中`
+  ≥45%, else `分散`). The supply-side counterpart to velocity: who owns the
+  niche, not how big it is. Costs one search + one videos.list (~101 units).
 - **Quota** — YouTube Data API v3 units. `search.list` = 100, `videos.list` /
   `channels.list` = 1 each. Only real (non-cache-hit) calls are charged. The
   day bucket uses Pacific Time (`QUOTA_TIMEZONE`), matching YouTube's reset.

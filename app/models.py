@@ -6,6 +6,7 @@ class VideoInfo(BaseModel):
     video_id: str
     title: str
     channel_title: str
+    channel_id: str = ""
     published_at: str
     view_count: int
     like_count: int
@@ -234,6 +235,27 @@ class ChannelInfo(BaseModel):
 class ChannelSearchResult(BaseModel):
     channels: List[ChannelInfo]
     total_count: int
+
+
+class ChannelLeaderRow(BaseModel):
+    channel_id: str = ""
+    channel_title: str
+    video_count: int          # videos this channel contributed to the sample
+    total_views: int
+    avg_views: float
+    avg_views_per_day: float = 0.0
+    engagement_rate: float = 0.0
+    top_video_views: int = 0
+    view_share: float = 0.0   # this channel's share of the sample's total views
+
+
+class ChannelLeaderboardResult(BaseModel):
+    keyword: str
+    channels: List[ChannelLeaderRow]
+    total_views: int
+    top3_share: float         # top 3 channels' combined share of sample views
+    concentration: str        # 垄断 / 集中 / 分散
+    scanned_at: str
 
 
 class ComparisonResult(BaseModel):

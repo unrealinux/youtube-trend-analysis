@@ -19,11 +19,12 @@ import app.config as config
 import app.services as services
 
 
-def short(vid, views, duration="PT30S", published="2024-06-01T12:00:00Z", tags=("python",), title="t"):
+def short(vid, views, duration="PT30S", published="2024-06-01T12:00:00Z", tags=("python",), title="t", channel="TestChannel"):
     return {
         "id": vid,
         "snippet": {
-            "title": title, "channelTitle": "TestChannel", "publishedAt": published,
+            "title": title, "channelTitle": channel, "channelId": f"UC-{channel}",
+            "publishedAt": published,
             "description": "d", "tags": list(tags), "thumbnails": {"high": {"url": "u"}},
         },
         "statistics": {"viewCount": str(views), "likeCount": "10", "commentCount": "2"},
@@ -880,6 +881,32 @@ def test_scan_metrics_reports_top_video_share(monkeypatch):
     m = run(services._scan_keyword_metrics("kw", 30))
     assert m.top_video_views == 800
     assert m.top_share == 0.8
+
+
+def test_make_video_info_keeps_channel_id():
+    v = services._make_video_info(short("x", 10, channel="MyCh"))
+    assert v.channel_id == "UC-MyCh"
+
+
+def test_channel_leaderboard_aggregates_and_flags_concentration(monkeypatch):
+    vids = ([short(f"a{i}", 800, channel="ChA") for i in range(2)]
+            + [short(f"b{i}", 100, channel="ChB") for i in range(2)]
+            + [short(f"c{i}", 100, channel="ChC") for i in range(2)])
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP(vids))
+    res = run(services.channel_leaderboard_service("kw", "past_year", 30))
+
+    assert res.channels[0].channel_title == "ChA"
+    assert res.channels[0].total_views == 1600
+    assert res.channels[0].view_share == 0.8
+    assert res.total_views == 2000
+    assert res.concentration == "垄断"
+
+
+def test_channel_leaderboard_reports_spread(monkeypatch):
+    vids = [short(f"v{i}", 100, channel=f"Ch{i}") for i in range(10)]
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP(vids))
+    res = run(services.channel_leaderboard_service("kw", "past_year", 30))
+    assert res.concentration == "分散"
 
 
 def test_discover_requires_seed_videos(monkeypatch):
