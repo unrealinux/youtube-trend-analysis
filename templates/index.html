@@ -260,6 +260,10 @@
         const srStatus = document.getElementById('sr-status');
         const liveObserver = new MutationObserver(() => { srStatus.textContent = '结果已更新'; });
         document.querySelectorAll('[data-live]').forEach(el => liveObserver.observe(el, { childList: true }));
+        restoreParams();
+        let __pt = null;
+        document.addEventListener('input', () => { clearTimeout(__pt); __pt = setTimeout(persistParams, 300); });
+        document.addEventListener('change', persistParams);
         loadHistory();
         
 
@@ -284,7 +288,7 @@
         }
         function formatDate(d) {if (!d) return '';const diff = (Date.now() - new Date(d).getTime()) / 1000;if (diff < 60) return '刚刚'; if (diff < 3600) return Math.floor(diff/60)+'分钟前';if (diff < 86400) return Math.floor(diff/3600)+'小时前';if (diff < 2592000) return Math.floor(diff/86400)+'天前';return new Date(d).toLocaleDateString('zh-CN');
         }
-        async function fetchTrends(endpoint, params) {const loading = document.getElementById('loading'), results = document.getElementById('results'), empty = document.getElementById('empty');loading.classList.remove('hidden'); results.classList.add('hidden'); empty.classList.add('hidden');try {    const resp = await fetch(`${endpoint}?${new URLSearchParams(params)}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    currentData = await resp.json(); renderResults(currentData);    const url = new URL(window.location.href); url.searchParams.set('keywords', params.keywords?.join(',') || '');    window.history.replaceState({}, '', url);} catch (e) { showError('获取数据失败', e.message, () => guard(() => fetchTrends(endpoint, params))); empty.classList.remove('hidden'); }finally { loading.classList.add('hidden'); }
+        async function fetchTrends(endpoint, params) {const loading = document.getElementById('loading'), results = document.getElementById('results'), empty = document.getElementById('empty');loading.classList.remove('hidden'); results.classList.add('hidden'); empty.classList.add('hidden');try {    const resp = await fetch(`${endpoint}?${new URLSearchParams(params)}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    currentData = await resp.json(); renderResults(currentData);    persistParams();} catch (e) { showError('获取数据失败', e.message, () => guard(() => fetchTrends(endpoint, params))); empty.classList.remove('hidden'); }finally { loading.classList.add('hidden'); }
         }
         async function searchTrends() {const kw = document.getElementById('keywords').value.trim();if (!kw) { showError('请输入关键词'); return; }await fetchTrends('/api/trends/search', { keywords: kw.split(',').map(k=>k.trim()), max_results: document.getElementById('max-results').value, order: document.getElementById('sort-order').value, time_range: document.getElementById('time-range').value });
         }
@@ -315,7 +319,7 @@
         function stopBusy() { clearInterval(__timer); document.getElementById('loading').classList.add('hidden'); }
         async function guard(fn, label) {
             if (__busy) return;
-            __busy = true; __aborted = false; clearError(); __ctl = new AbortController(); startBusy(label);
+            __busy = true; __aborted = false; clearError(); persistParams(); __ctl = new AbortController(); startBusy(label);
             try { await fn(); }
             finally { __busy = false; __ctl = null; stopBusy(); }
         }
@@ -342,6 +346,25 @@
             if (r) r.onclick = () => { clearError(); retry(); };
             b.querySelector('[data-act="close"]').onclick = clearError;
             b.scrollIntoView({ block: 'nearest' });
+        }
+        function persistParams() {
+            const p = new URLSearchParams();
+            document.querySelectorAll('input[id], select[id]').forEach(el => {
+                if (el.type === 'checkbox') p.set(el.id, el.checked ? '1' : '0');
+                else if (el.value) p.set(el.id, el.value);
+            });
+            const url = new URL(window.location.href);
+            url.search = p.toString();
+            window.history.replaceState({}, '', url);
+        }
+        function restoreParams() {
+            const p = new URLSearchParams(window.location.search);
+            document.querySelectorAll('input[id], select[id]').forEach(el => {
+                if (!p.has(el.id)) return;
+                if (el.type === 'checkbox') { el.checked = p.get(el.id) === '1'; return; }
+                if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === p.get(el.id))) return;
+                el.value = p.get(el.id);
+            });
         }
         function setCurrent(data) { currentData = data; document.getElementById('toolbar')?.classList.remove('hidden'); }
         function copyResults() { if (!currentData) { showError('暂无结果'); return; } navigator.clipboard.writeText(JSON.stringify(currentData,null,2)).then(()=>showNotice('已复制到剪贴板')); }
