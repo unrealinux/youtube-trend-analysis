@@ -86,7 +86,27 @@
         .stat-value { font-size: 32px; font-weight: bold; color: var(--accent-text); }
         .stat-label { font-size: 12px; color: var(--muted); margin-top: 8px; text-transform: uppercase; }
         .chart-section { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px; }
-        @media (max-width: 768px) { .chart-section { grid-template-columns: 1fr; } }
+        .deep-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        @media (max-width: 768px) {
+            .chart-section, .deep-grid { grid-template-columns: 1fr; }
+            .tabs { overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+            .tab { flex: 0 0 auto; white-space: nowrap; }
+            .form-row { flex-direction: column; }
+            .input-group { min-width: 0; }
+            .container { padding: 12px; }
+            .theme-toggle { position: static; display: block; margin: 8px 0 0 auto; }
+            h1 { padding-top: 20px; font-size: 24px; }
+            .tabs::-webkit-scrollbar { height: 6px; }
+            .tabs::-webkit-scrollbar-track { background: transparent; }
+            .tabs::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 3px; }
+            input, select { font-size: 16px; }
+            .batch-table { min-width: 680px; }
+            #batch-table, #hot-table, #discover-result, #leaderboard-result,
+            #comparison-content, #deep-result, #channel-insights-result {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
         .chart-card { background: var(--surface); border-radius: 12px; padding: 20px; transition: background 0.3s; }
         body.light .chart-card { border: 1px solid var(--border); }
         .chart-card h3 { margin-bottom: 16px; font-size: 16px; color: var(--text-2); }
@@ -148,7 +168,7 @@
         .mini-tag { background:var(--surface-2); color:var(--text-3); padding:3px 10px; border-radius:10px; font-size:11px; }
         :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
         input:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-        .batch-table th, .batch-table td { overflow-wrap: anywhere; }
+        .batch-table th, .batch-table td { overflow-wrap: break-word; }
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
         .v-verdict { font-weight: bold; }
         .v-worth { color: var(--success); }
@@ -180,7 +200,7 @@
         </div>
         <div id="feature-panel" class="hidden" role="tabpanel" aria-labelledby="tab-feature"><div class="form-row">    <div class="input-group" style="flex: 2;">        <label for="feature-keyword">分析关键词</label>        <input type="text" id="feature-keyword" placeholder="例如: AI">    </div>    <div class="input-group" style="flex: 1;">        <label for="feature-time-range">时间范围</label>        <select id="feature-time-range"><option value="this_week">本周</option><option value="this_month" selected>本月</option><option value="past_year">过去一年</option>        </select>    </div>    <div class="input-group" style="flex: 1;">        <label for="feature-max-results">分析视频数</label>        <select id="feature-max-results"><option value="10">10</option><option value="20" selected>20</option><option value="30">30</option>        </select>    </div></div><div class="form-row">    <div class="input-group" style="flex: 0 0 auto;">        <button class="btn-search" onclick="guard(analyzeFeatures)">🔍 分析特征</button>    </div></div><div id="feature-result" data-live class="hidden" style="margin-top: 20px;"></div>
         </div>
-        <div id="deep-panel" class="hidden" role="tabpanel" aria-labelledby="tab-deep"><div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">    <div>        <h3 style="margin-bottom:12px;color:var(--text-2);">关键词深度分析</h3>        <div class="form-row"><div class="input-group" style="flex:2;">    <label for="deep-keyword">关键词</label>    <input type="text" id="deep-keyword" placeholder="例如: AI教程"></div><div class="input-group" style="flex:1;">    <label for="deep-max-results">视频数</label>    <select id="deep-max-results">        <option value="20">20</option>        <option value="30" selected>30</option>        <option value="50">50</option>    </select></div><div class="input-group" style="flex:1;">    <label for="deep-time-range">时间范围</label>    <select id="deep-time-range">        <option value="this_week">本周</option>        <option value="this_month" selected>本月</option>        <option value="past_year">过去一年</option>    </select></div><div class="input-group" style="flex:0 0 auto; display:flex; align-items:flex-end;">    <button class="btn-search" onclick="guard(analyzeShortsDetailed)">🔍 分析</button></div>        </div>        <div id="deep-result" data-live style="margin-top:16px;"></div>    </div>    <div>        <h3 style="margin-bottom:12px;color:var(--text-2);">频道 Shorts 分析</h3>        <div class="form-row"><div class="input-group" style="flex:2;">    <label for="channel-insights-id">频道 ID</label>    <input type="text" id="channel-insights-id" placeholder="UC..."></div><div class="input-group" style="flex:1;">    <label for="channel-insights-time">时间范围</label>    <select id="channel-insights-time">        <option value="this_month">本月</option>        <option value="past_year" selected>过去一年</option>    </select></div><div class="input-group" style="flex:0 0 auto; display:flex; align-items:flex-end;">    <button class="btn-search" onclick="guard(getChannelInsights)">📊 分析</button></div>        </div>        <div id="channel-insights-result" data-live style="margin-top:16px;"></div>    </div></div>
+        <div id="deep-panel" class="hidden" role="tabpanel" aria-labelledby="tab-deep"><div class="deep-grid">    <div>        <h3 style="margin-bottom:12px;color:var(--text-2);">关键词深度分析</h3>        <div class="form-row"><div class="input-group" style="flex:2;">    <label for="deep-keyword">关键词</label>    <input type="text" id="deep-keyword" placeholder="例如: AI教程"></div><div class="input-group" style="flex:1;">    <label for="deep-max-results">视频数</label>    <select id="deep-max-results">        <option value="20">20</option>        <option value="30" selected>30</option>        <option value="50">50</option>    </select></div><div class="input-group" style="flex:1;">    <label for="deep-time-range">时间范围</label>    <select id="deep-time-range">        <option value="this_week">本周</option>        <option value="this_month" selected>本月</option>        <option value="past_year">过去一年</option>    </select></div><div class="input-group" style="flex:0 0 auto; display:flex; align-items:flex-end;">    <button class="btn-search" onclick="guard(analyzeShortsDetailed)">🔍 分析</button></div>        </div>        <div id="deep-result" data-live style="margin-top:16px;"></div>    </div>    <div>        <h3 style="margin-bottom:12px;color:var(--text-2);">频道 Shorts 分析</h3>        <div class="form-row"><div class="input-group" style="flex:2;">    <label for="channel-insights-id">频道 ID</label>    <input type="text" id="channel-insights-id" placeholder="UC..."></div><div class="input-group" style="flex:1;">    <label for="channel-insights-time">时间范围</label>    <select id="channel-insights-time">        <option value="this_month">本月</option>        <option value="past_year" selected>过去一年</option>    </select></div><div class="input-group" style="flex:0 0 auto; display:flex; align-items:flex-end;">    <button class="btn-search" onclick="guard(getChannelInsights)">📊 分析</button></div>        </div>        <div id="channel-insights-result" data-live style="margin-top:16px;"></div>    </div></div>
         </div>
         <div id="trend-panel" class="hidden" role="tabpanel" aria-labelledby="tab-trend"><div class="form-row">    <div class="input-group" style="flex: 2;">        <label for="trend-keyword">关键词</label>        <input type="text" id="trend-keyword" placeholder="输入关键词追踪趋势">    </div>    <div class="input-group" style="flex: 0 0 auto;">        <button class="btn-search" onclick="guard(trackTrend)">📈 追踪</button>    </div></div><div id="trend-result" data-live class="hidden" style="margin-top: 20px;"></div>
         </div>
