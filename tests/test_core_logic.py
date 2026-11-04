@@ -275,6 +275,18 @@ def test_sync_write_helpers_remain_usable(db):
     assert db.get_today_quota_used() == 7
 
 
+def test_recent_searches_returns_one_row_per_query(db):
+    """Repeated searches must not fill the history list; keep the newest row."""
+    db.save_search_history(["ai"], 3)
+    db.save_search_history(["ai"], 5)
+    db.save_search_history(["python"], 2)
+
+    rows = db.get_recent_searches(10)
+    assert len(rows) == 2
+    assert {r.query for r in rows} == {"ai", "python"}
+    assert next(r for r in rows if r.query == "ai").result_count == 5
+
+
 # ---- Config: CORS defaults cover documented ports; DB path dir is created ----
 
 def test_cors_defaults_cover_documented_ports():

@@ -26,6 +26,7 @@
             --broad: #fb923c;
             --danger: #f87171;
             --focus: #ff5a5a;
+            --accent-tint: #452222;
             --alert-warn-bg: #fef3c7;
             --alert-warn-text: #92400e;
             --alert-error-bg: #fee2e2;
@@ -50,6 +51,7 @@
             --broad: #c2410c;
             --danger: #b91c1c;
             --focus: #b00000;
+            --accent-tint: #e4c5c5;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--canvas); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
@@ -60,8 +62,8 @@
         .search-panel { background: var(--surface); border-radius: 12px; padding: 24px; margin-bottom: 24px; transition: background 0.3s; }
         body.light .search-panel { border: 1px solid var(--border); }
         .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
-        .tab { padding: 10px 20px; background: var(--surface-2); border: none; color: var(--text-3); border-radius: 8px; cursor: pointer; transition: all 0.2s; }
-        .tab.active { background: var(--accent); color: var(--on-accent); }
+        .tab { padding: 10px 20px; background: var(--surface-2); border: none; color: var(--text-3); border-radius: 8px; cursor: pointer; transition: background 0.2s, color 0.2s; }
+        .tab.active { background: var(--accent-tint); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent-text); }
         .tab:hover:not(.active) { background: var(--surface-3); }
         .form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
         .input-group { flex: 1; min-width: 200px; }
@@ -76,17 +78,22 @@
         .history-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
         .history-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
         .history-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-        .history-tag { background: var(--surface-2); color: var(--text-3); padding: 4px 12px; border-radius: 12px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+        .history-tag { background: var(--surface-2); color: var(--text-3); padding: 4px 12px; border-radius: 12px; font-size: 12px; cursor: pointer; transition: background 0.2s, color 0.2s; }
         .history-tag:hover { background: var(--accent); color: var(--on-accent); }
         .history-clear { background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; margin-left: auto; min-height: 24px; padding: 4px 6px; }
         .history-clear:hover { color: var(--accent-text); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .stat-card { background: var(--surface); border-radius: 12px; padding: 20px; text-align: center; transition: background 0.3s; }
         body.light .stat-card { border: 1px solid var(--border); }
         .stat-value { font-size: 32px; font-weight: bold; color: var(--accent-text); }
         .stat-label { font-size: 12px; color: var(--muted); margin-top: 8px; text-transform: uppercase; }
         .chart-section { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px; }
         .deep-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        @media (prefers-reduced-motion: reduce) {
+            .video-card, .tab, .tag, .btn-tool, .history-tag, .btn-search { transition: none; }
+            .video-card:hover { transform: none; }
+            .loading::after { animation-duration: 3s; }
+        }
         @media (max-width: 768px) {
             .chart-section, .deep-grid { grid-template-columns: 1fr; }
             .tabs { overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
@@ -112,7 +119,7 @@
         .chart-card h3 { margin-bottom: 16px; font-size: 16px; color: var(--text-2); }
         .chart-container { position: relative; height: 300px; }
         .tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; }
-        .tag { background: var(--surface-2); color: var(--text-2); padding: 6px 14px; border-radius: 20px; font-size: 13px; transition: all 0.2s; }
+        .tag { background: var(--surface-2); color: var(--text-2); padding: 6px 14px; border-radius: 20px; font-size: 13px; transition: background 0.2s, color 0.2s; }
         .tag:hover { background: var(--accent); color: var(--on-accent); }
         .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
         .video-card { background: var(--surface); border-radius: 12px; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; text-decoration: none; color: inherit; display: block; }
@@ -127,7 +134,7 @@
         .video-stats { display: flex; gap: 16px; font-size: 12px; color: var(--text-3); }
         .video-stats span { display: flex; align-items: center; gap: 4px; }
         .toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-        .btn-tool { padding: 8px 16px; background: var(--surface-2); border: none; color: var(--text-2); border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .btn-tool { padding: 8px 16px; background: var(--surface-2); border: none; color: var(--text-2); border-radius: 8px; cursor: pointer; font-size: 13px; transition: background 0.2s, color 0.2s; }
         .btn-tool:hover { background: var(--accent); color: var(--on-accent); }
         .loading { text-align: center; padding: 40px; color: var(--muted); }
         .loading::after { content: ''; animation: dots 1.5s infinite; }
@@ -135,10 +142,6 @@
         .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
         .empty-icon { font-size: 48px; margin-bottom: 16px; }
         .hidden { display: none; }
-        .comparison-panel { background: var(--surface); border-radius: 12px; padding: 24px; margin-bottom: 24px; transition: background 0.3s; }
-        body.light .comparison-panel { border: 1px solid var(--border); }
-        .history-dashboard { background: var(--surface); border-radius: 12px; padding: 24px; margin-bottom: 24px; transition: background 0.3s; }
-        body.light .history-dashboard { border: 1px solid var(--border); }
         .history-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--surface-2); border-radius: 8px; margin-bottom: 8px; }
         .history-item:hover { background: var(--surface-3); }
         .comparison-result { background: var(--surface); border-radius: 12px; padding: 24px; margin-top: 24px; transition: background 0.3s; }
@@ -157,8 +160,6 @@
         .batch-table tr:hover { background: var(--surface); }
         body.light .batch-table tr:hover { background: var(--surface-2); }
         .rank-badge { display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: bold; }
-        .heat-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:2px; margin-top:8px; }
-        .heat-cell { aspect-ratio:1; border-radius:3px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; font-weight:bold; }
         .detail-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px; }
         .detail-card { background:var(--surface); border-radius:10px; padding:14px; text-align:center; }
         body.light .detail-card { border:1px solid var(--border); }
@@ -170,6 +171,7 @@
         input:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
         .batch-table th, .batch-table td { overflow-wrap: break-word; }
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+        .conclusion { font-size: 14px; margin-bottom: 10px; }
         .v-verdict { font-weight: bold; }
         .v-worth { color: var(--success); }
         .v-watch { color: var(--warning); }
@@ -295,13 +297,21 @@ document.getElementById('channel-search-input').addEventListener('keypress',e=>{
         // Batch scan
         async function batchScan() {const kw = document.getElementById('batch-keywords').value.trim();if (!kw) { alert('请输入关键词'); return; }const n = kw.split(',').filter(k => k.trim()).length;if (!confirm(`批量扫描会为 ${n} 个关键词各发 1 次 search.list，消耗约 ${n * 100} 单位配额（每天上限 10000）。确定继续？`)) return;const loading = document.getElementById('loading'), results = document.getElementById('batch-scan-results');loading.classList.remove('hidden'); results.classList.add('hidden');try {    const resp = await fetch(`/api/trends/batch-scan?keywords=${encodeURIComponent(kw)}&time_range=${document.getElementById('batch-time-range').value}&max_results=${document.getElementById('batch-max-results').value}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    const data = await resp.json();    renderBatchResults(data);    results.classList.remove('hidden');} catch (e) { alert('扫描失败: ' + e.message); }finally { loading.classList.add('hidden'); }
         }
-        function renderBatchResults(data) {setCurrent(data);const table = document.getElementById('batch-table');const lc = document.body.classList.contains('light');const tc = lc ? '#666' : '#888', gc = lc ? '#e0e0e0' : '#333';let html = '<table class="batch-table"><thead><tr><th>关键词</th><th>视频数</th><th>平均播放</th><th>播放/天</th><th>总播放</th><th>互动率</th></tr></thead><tbody>';data.keywords.forEach(r => {    html += `<tr><td><strong>${escapeHtml(r.keyword)}</strong></td><td>${r.video_count}</td><td>${formatNumber(Math.round(r.avg_views))}</td><td>${formatNumber(Math.round(r.avg_views_per_day || 0))}</td><td>${formatNumber(r.total_views)}</td><td>${r.engagement_rate.toFixed(2)}%</td></tr>`;});html += '</tbody></table>';table.innerHTML = html;
+        function renderBatchResults(data) {setCurrent(data);const table = document.getElementById('batch-table');const lc = document.body.classList.contains('light');const tc = lc ? '#666' : '#888', gc = lc ? '#e0e0e0' : '#333';const byVel = [...data.keywords].sort((a, b) => b.avg_views_per_day - a.avg_views_per_day);
+let conclusion = '';
+if (data.keywords.length) {
+  const bv = data.keywords[0], bf = byVel[0];
+  conclusion = `<div class="conclusion">播放大：<strong>${escapeHtml(bv.keyword)}</strong>（${formatNumber(Math.round(bv.avg_views))}）· 速度最快：<strong class="v-worth">${escapeHtml(bf.keyword)}</strong>（${formatNumber(Math.round(bf.avg_views_per_day))}/天）</div>`;
+}
+let html = conclusion + '<table class="batch-table"><thead><tr><th>关键词</th><th>视频数</th><th>平均播放</th><th>播放/天</th><th>总播放</th><th>互动率</th></tr></thead><tbody>';data.keywords.forEach(r => {    html += `<tr><td><strong>${escapeHtml(r.keyword)}</strong></td><td>${r.video_count}</td><td>${formatNumber(Math.round(r.avg_views))}</td><td>${formatNumber(Math.round(r.avg_views_per_day || 0))}</td><td>${formatNumber(r.total_views)}</td><td>${r.engagement_rate.toFixed(2)}%</td></tr>`;});html += '</tbody></table>';table.innerHTML = html;
         }
 
         // Hot categories
         async function loadHotCategories() {if (!confirm('热门类别扫描会逐个扫描预置类别，发出约 34 次 search.list，消耗约 3400 单位配额（每天上限 10000）。确定继续？')) return;const loading = document.getElementById('loading'), results = document.getElementById('hot-results');loading.classList.remove('hidden'); results.classList.add('hidden');try {    const resp = await fetch(`/api/trends/hot-categories?time_range=${document.getElementById('hot-time-range').value}&max_results=${document.getElementById('hot-max-count').value}`);    if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail || '请求失败'); }    const data = await resp.json();    renderHotResults(data);    results.classList.remove('hidden');} catch (e) { alert('扫描失败: ' + e.message); }finally { loading.classList.add('hidden'); }
         }
-        function renderHotResults(data) {setCurrent(data);const chart = document.getElementById('hot-chart');if (window.hotChart) window.hotChart.destroy();const lc = document.body.classList.contains('light'), tc = lc?'#666':'#888', gc = lc?'#e0e0e0':'#333';window.hotChart = new Chart(chart.getContext('2d'), {    type:'bar',    data:{ labels: data.map(k=>k.category), datasets:[{ label:'平均播放量', data: data.map(k=>k.avg_views), backgroundColor: 'rgba(255,0,0,0.7)', borderColor: '#ff0000', borderWidth: 1 }] },    options: { responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ beginAtZero:true, ticks:{ color:tc, callback:v=>formatNumber(v) }, grid:{ color:gc } }, y:{ ticks:{ color:tc }, grid:{ display:false } } } }});const tableHtml = '<table class="batch-table"><thead><tr><th>#</th><th>类别</th><th>平均播放量</th><th>视频数</th><th>最高单视频</th><th>互动率</th></tr></thead><tbody>' +    data.map((k,i) => `<tr>        <td><span class="rank-badge">${i+1}</span></td>        <td><strong>${escapeHtml(k.category)}</strong>${(k.top_keywords || []).length ? '<div class="tag-list" style="margin-top:4px;">' + k.top_keywords.map(t => `<span class="mini-tag">${escapeHtml(t)}</span>`).join('') + '</div>' : ''}</td>        <td>${formatNumber(Math.round(k.avg_views))}</td>        <td>${k.video_count}</td>        <td>${formatNumber(k.top_video_views)}</td>        <td>${k.engagement_rate.toFixed(2)}%</td>    </tr>`).join('') + '</tbody></table>';document.getElementById('hot-table').innerHTML = tableHtml;
+        function renderHotResults(data) {setCurrent(data);const chart = document.getElementById('hot-chart');if (window.hotChart) window.hotChart.destroy();const lc = document.body.classList.contains('light'), tc = lc?'#666':'#888', gc = lc?'#e0e0e0':'#333';window.hotChart = new Chart(chart.getContext('2d'), {    type:'bar',    data:{ labels: data.map(k=>k.category), datasets:[{ label:'平均播放量', data: data.map(k=>k.avg_views), backgroundColor: 'rgba(255,0,0,0.7)', borderColor: '#ff0000', borderWidth: 1 }] },    options: { responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ beginAtZero:true, ticks:{ color:tc, callback:v=>formatNumber(v) }, grid:{ color:gc } }, y:{ ticks:{ color:tc }, grid:{ display:false } } } }});const topCat = data[0];
+const conclusion = `<div class="conclusion">最热类别：<strong class="v-worth">${escapeHtml(topCat.category)}</strong>（均播 ${formatNumber(Math.round(topCat.avg_views))}，互动 ${topCat.engagement_rate.toFixed(2)}%）</div>`;
+const tableHtml = conclusion + '<table class="batch-table"><thead><tr><th>#</th><th>类别</th><th>平均播放量</th><th>视频数</th><th>最高单视频</th><th>互动率</th></tr></thead><tbody>' +    data.map((k,i) => `<tr>        <td><span class="rank-badge">${i+1}</span></td>        <td><strong>${escapeHtml(k.category)}</strong>${(k.top_keywords || []).length ? '<div class="tag-list" style="margin-top:4px;">' + k.top_keywords.map(t => `<span class="mini-tag">${escapeHtml(t)}</span>`).join('') + '</div>' : ''}</td>        <td>${formatNumber(Math.round(k.avg_views))}</td>        <td>${k.video_count}</td>        <td>${formatNumber(k.top_video_views)}</td>        <td>${k.engagement_rate.toFixed(2)}%</td>    </tr>`).join('') + '</tbody></table>';document.getElementById('hot-table').innerHTML = tableHtml;
         }
 
         // Feature analysis
@@ -332,7 +342,13 @@ document.getElementById('channel-search-input').addEventListener('keypress',e=>{
         function analyzeChannel(id) {[...document.querySelectorAll('.tab')].find(b => b.textContent.includes('频道分析')).click(); useChannel(id);}
         async function discoverKeywords() {const seed = document.getElementById('discover-seed').value.trim();if (!seed) { alert('请输入种子关键词'); return; }const scan = document.getElementById('discover-scan').checked;const n = parseInt(document.getElementById('discover-limit').value, 10);if (scan && !confirm(`机会挖掘会先发 1 次 search.list 挖种子标签，再逐个扫描 ${n} 个候选词（每个 +100 单位），共约 ${n * 100 + 100} 单位配额（每天上限 10000）。确定继续？`)) return;const box = document.getElementById('discover-result');box.classList.remove('hidden');box.innerHTML = `<div class="loading">挖掘中${scan ? '（正在扫描候选词）' : ''}</div>`;try {    const params = new URLSearchParams({ seed: seed, limit: document.getElementById('discover-limit').value, scan: String(scan), time_range: document.getElementById('discover-time-range').value });    const resp = await fetch(`/api/discover?${params}`);    if (!resp.ok) throw new Error((await resp.json()).detail || '挖掘失败');    renderDiscovery(await resp.json());} catch (e) { box.innerHTML = `<div class="alert alert-error">挖掘失败: ${escapeHtml(e.message)}</div>`; }
         }
-        function renderDiscovery(data) {setCurrent(data);const box = document.getElementById('discover-result');if (!data.candidates?.length) { box.innerHTML = '<div class="alert alert-warning">没有挖到相关关键词</div>'; return; }const scan = data.candidates.some(c => c.scanned);const vClass = { '值得做': 'v-worth', '观望': 'v-watch', '过宽': 'v-broad', '避开': 'v-avoid' };let html = `<p style="margin-bottom:12px;color:var(--muted);font-size:13px;">种子「${escapeHtml(data.seed)}」的候选词（按${scan ? '播放速度' : '共现次数'}排序）${scan ? ' · 判定：播放/天高于中位 + 互动率≥1.5% + 头部占比<35% = 值得做 · 播放/天≥中位 10 倍 = 过宽（品类非赛道）' : ''}</p>`;html += `<table class="batch-table"><thead><tr><th>候选词</th><th>判定</th><th>出现次数</th>${scan ? '<th>平均播放</th><th>播放/天</th><th>样本数</th><th>互动率</th>' : ''}<th></th></tr></thead><tbody>`;data.candidates.forEach(c => {    const cls = vClass[c.verdict] || 'v-muted', reason = (c.reasons || []).join(' · ');    html += `<tr><td><strong>${escapeHtml(c.keyword)}</strong></td><td><span class="v-verdict ${cls}">${escapeHtml(c.verdict || '-')}</span>${reason ? `<div class="v-reason">${escapeHtml(reason)}</div>` : ''}</td><td>${c.occurrences}</td>`;    if (scan) html += `<td>${c.scanned ? formatNumber(Math.round(c.avg_views)) : '-'}</td><td>${c.scanned ? formatNumber(Math.round(c.avg_views_per_day)) : '-'}</td><td>${c.scanned ? c.video_count : '-'}</td><td>${c.scanned ? c.engagement_rate.toFixed(2) + '%' : '-'}</td>`;    html += `<td><button class="btn-tool" data-kw="${escapeHtml(c.keyword)}" onclick="useDiscovered(this.dataset.kw)">分析 →</button></td></tr>`;});html += '</tbody></table>';box.innerHTML = html;
+        function renderDiscovery(data) {setCurrent(data);const box = document.getElementById('discover-result');if (!data.candidates?.length) { box.innerHTML = '<div class="alert alert-warning">没有挖到相关关键词</div>'; return; }const scan = data.candidates.some(c => c.scanned);const vClass = { '值得做': 'v-worth', '观望': 'v-watch', '过宽': 'v-broad', '避开': 'v-avoid' };let conclusion = '';
+if (scan) {
+  const worth = data.candidates.filter(c => c.verdict === '值得做').map(c => c.keyword);
+  const avoid = data.candidates.filter(c => c.verdict === '避开').map(c => c.keyword);
+  conclusion = `<div class="conclusion">${worth.length ? `<strong class="v-worth">最值得做：${escapeHtml(worth.join('、'))}</strong>` : '<span class="v-muted">本批没有「值得做」</span>'}${avoid.length ? ` · <span class="v-avoid">避开：${escapeHtml(avoid.join('、'))}</span>` : ''}</div>`;
+}
+let html = conclusion + `<p style="margin-bottom:12px;color:var(--muted);font-size:13px;">种子「${escapeHtml(data.seed)}」的候选词（按${scan ? '播放速度' : '共现次数'}排序）${scan ? ' · 判定：播放/天高于中位 + 互动率≥1.5% + 头部占比<35% = 值得做 · 播放/天≥中位 10 倍 = 过宽（品类非赛道）' : ''}</p>`;html += `<table class="batch-table"><thead><tr><th>候选词</th><th>判定</th><th>出现次数</th>${scan ? '<th>平均播放</th><th>播放/天</th><th>样本数</th><th>互动率</th>' : ''}<th></th></tr></thead><tbody>`;data.candidates.forEach(c => {    const cls = vClass[c.verdict] || 'v-muted', reason = (c.reasons || []).join(' · ');    html += `<tr><td><strong>${escapeHtml(c.keyword)}</strong></td><td><span class="v-verdict ${cls}">${escapeHtml(c.verdict || '-')}</span>${reason ? `<div class="v-reason">${escapeHtml(reason)}</div>` : ''}</td><td>${c.occurrences}</td>`;    if (scan) html += `<td>${c.scanned ? formatNumber(Math.round(c.avg_views)) : '-'}</td><td>${c.scanned ? formatNumber(Math.round(c.avg_views_per_day)) : '-'}</td><td>${c.scanned ? c.video_count : '-'}</td><td>${c.scanned ? c.engagement_rate.toFixed(2) + '%' : '-'}</td>`;    html += `<td><button class="btn-tool" data-kw="${escapeHtml(c.keyword)}" onclick="useDiscovered(this.dataset.kw)">分析 →</button></td></tr>`;});html += '</tbody></table>';box.innerHTML = html;
         }
         function useDiscovered(keyword) { switchTab(document.querySelectorAll('.tab')[0], 'keywords'); document.getElementById('keywords').value = keyword; searchTrends(); }
         document.getElementById('discover-seed').addEventListener('keypress',e=>{if(e.key==='Enter')discoverKeywords();});

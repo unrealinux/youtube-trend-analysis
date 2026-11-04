@@ -109,8 +109,12 @@ def save_search_history(keywords: List[str], result_count: int) -> None:
 def get_recent_searches(limit: int = 10) -> List[SearchHistoryEntry]:
     conn = get_db()
     cursor = conn.cursor()
+    # One row per query: duplicate searches of the same keyword would otherwise
+    # fill the list with repeats. MAX(id) picks the newest insert per query.
     cursor.execute(
-        "SELECT id, query, timestamp, result_count FROM search_history ORDER BY timestamp DESC LIMIT ?",
+        "SELECT id, query, timestamp, result_count FROM search_history "
+        "WHERE id IN (SELECT MAX(id) FROM search_history GROUP BY query) "
+        "ORDER BY timestamp DESC LIMIT ?",
         (limit,)
     )
     rows = cursor.fetchall()
