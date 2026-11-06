@@ -52,16 +52,26 @@ init_db()
 logger.info("YouTube Trend Analysis API started")
 
 
-# Mount static files if present
-if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+HERE = os.path.dirname(__file__)
+TEMPLATES_DIR = os.path.join(HERE, "..", "templates")
+STATIC_DIR = os.path.join(HERE, "static")
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+def _page(name: str) -> HTMLResponse:
+    with open(os.path.join(TEMPLATES_DIR, name), "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    template_path = os.path.join(os.path.dirname(__file__), "..", "templates", "index.html")
-    with open(template_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
+    return _page("index.html")
+
+
+@app.get("/help", response_class=HTMLResponse)
+async def help_page():
+    return _page("help.html")
 
 
 # Include routers

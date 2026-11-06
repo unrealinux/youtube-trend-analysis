@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>怎么用 · YouTube 数据分析</title>
+    <link rel="stylesheet" href="/static/tokens.css">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%231a1a1a'/%3E%3Crect%20x='7'%20y='18'%20width='4'%20height='7'%20rx='1'%20fill='%23ff5a5a'/%3E%3Crect%20x='14'%20y='12'%20width='4'%20height='13'%20rx='1'%20fill='%23c40000'/%3E%3Crect%20x='21'%20y='8'%20width='4'%20height='17'%20rx='1'%20fill='%23ff5a5a'/%3E%3C/svg%3E">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--canvas); color: var(--text); line-height: 1.7; }
+        .wrap { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
+        a { color: var(--accent-text); }
+        .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; margin-bottom: 20px; }
+        .back:hover { color: var(--text); }
+        h1 { font-size: 28px; margin-bottom: 6px; }
+        .lede { color: var(--muted); margin-bottom: 8px; }
+        h2 { font-size: 18px; margin: 36px 0 12px; padding-top: 22px; border-top: 1px solid var(--border); }
+        h3 { font-size: 14px; margin: 18px 0 6px; color: var(--text-2); }
+        p, li { color: var(--text-2); }
+        ul, ol { padding-left: 22px; }
+        li { margin: 6px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
+        th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+        td:first-child { white-space: nowrap; }
+        code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+        .tiers { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+        .tier { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; flex: 1 1 170px; }
+        .tier b { display: block; margin-bottom: 4px; font-size: 14px; }
+        .tier span { font-size: 13px; color: var(--muted); }
+        .v-worth { color: var(--success); }
+        .v-watch { color: var(--warning); }
+        .v-broad { color: var(--broad); }
+        .v-avoid { color: var(--danger); }
+        .note { background: var(--surface-2); padding: 12px 14px; border-radius: 6px; font-size: 14px; margin: 14px 0; }
+        .note b { color: var(--accent-text); }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <a class="back" href="/">← 返回分析台</a>
+    <h1>怎么用</h1>
+    <p class="lede">这个工具只做一件事：把 YouTube 数据变成「下一条视频做什么」的决定。</p>
+
+    <h2>三步主线</h2>
+    <ol>
+        <li><strong>找赛道</strong> — 「机会挖掘」输入一个种子词，挖出相关词并按播放速度排序。种子要「一层宽」：比 <code>AI</code> 具体，比 <code>AI 老照片修复</code> 宽。</li>
+        <li><strong>验选题</strong> — 把候选词丢进「批量扫描」横比，再用「频道榜单」看这个方向的头部集中度。</li>
+        <li><strong>看频道</strong> — 锁定方向后，用「频道分析」和「深度分析」看爆款长什么样：时长、标题、发布时间。</li>
+    </ol>
+
+    <h2>判定四态</h2>
+    <p>每个候选词下方会给一个判定和一句原因。规则按顺序执行：</p>
+    <div class="tiers">
+        <div class="tier"><b class="v-avoid">避开</b><span>单条视频占样本播放 ≥50%，或互动率 &lt;0.8%</span></div>
+        <div class="tier"><b class="v-broad">过宽</b><span>播放/天 ≥ 本批中位数的 10 倍，更像品类而非赛道</span></div>
+        <div class="tier"><b class="v-worth">值得做</b><span>播放/天高于中位、互动率 ≥1.5%、头部占比 &lt;35%</span></div>
+        <div class="tier"><b class="v-watch">观望</b><span>其余情况，通常是某项差一点</span></div>
+    </div>
+    <p class="note"><b>为什么先判「避开」：</b>一条视频吃掉一半播放，说明这个「赛道」其实是一次爆款，不是可以持续做的方向。</p>
+
+    <h2>配额</h2>
+    <p>YouTube Data API 每天 10,000 单位，按太平洋时间午夜重置。</p>
+    <table>
+        <thead><tr><th>动作</th><th>消耗</th></tr></thead>
+        <tbody>
+            <tr><td>关键词搜索</td><td>100 单位（<code>search.list</code>）</td></tr>
+            <tr><td>批量扫描</td><td>词数 × 100</td></tr>
+            <tr><td>热门类别</td><td>34 × 100 ≈ 3400</td></tr>
+            <tr><td>机会挖掘</td><td>1 + 候选数 × 100</td></tr>
+            <tr><td>频道榜单</td><td>约 101</td></tr>
+            <tr><td>videos.list / channels.list</td><td>1 单位</td></tr>
+        </tbody>
+    </table>
+    <p>高消耗动作会先弹确认，告诉你花多少。5 分钟内的相同请求命中缓存，不重复计费。</p>
+
+    <h2>九个入口</h2>
+    <table>
+        <thead><tr><th>入口</th><th>做什么</th></tr></thead>
+        <tbody>
+            <tr><td>机会挖掘</td><td>种子词 → 相关词 + 四态判定</td></tr>
+            <tr><td>频道榜单</td><td>关键词按频道聚合，看前 3 占多少播放</td></tr>
+            <tr><td>热门类别</td><td>扫 34 个预置类别，找播放最高的赛道</td></tr>
+            <tr><td>关键词搜索</td><td>单个词的视频、播放、互动、发布频率</td></tr>
+            <tr><td>批量扫描</td><td>多个词横比，按平均播放排序</td></tr>
+            <tr><td>特征分析</td><td>标题特征、最佳时段、时长区间、成功评分</td></tr>
+            <tr><td>深度分析</td><td>播放分位数、时长分布、高播放频道和标签</td></tr>
+            <tr><td>趋势追踪</td><td>记录播放速度随时间的变化，隔天刷新看涨跌</td></tr>
+            <tr><td>频道分析</td><td>单个频道近一年的视频表现</td></tr>
+        </tbody>
+    </table>
+
+    <h2>三条局限</h2>
+    <ul>
+        <li><strong>只验 YouTube。</strong> B站、抖音、小红书的题材，这个工具给不了数据。</li>
+        <li><strong>样本是头部。</strong> 每个查询最多 50 条、按播放量排序，平均值描述的是头部，不是普通视频。</li>
+        <li><strong>判定是启发式。</strong> 阈值是描述性的，不是市场真理；绿色也只是「值得试」，不是「一定成」。</li>
+    </ul>
+
+    <p class="note"><b>参数会写进地址栏。</b> 当前配置可以收藏或分享，打开链接只回填参数，不会自动执行、不会偷花配额。</p>
+</div>
+<script>
+    // Respect the theme chosen on the main page; the help page has no toggle of its own.
+    try { if (localStorage.getItem('theme') === 'light') document.body.classList.add('light'); } catch (e) {}
+</script>
+</body>
+</html>

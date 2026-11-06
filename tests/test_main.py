@@ -120,6 +120,17 @@ class TestFastAPIEndpoints:
         assert resp.status_code == 200
         assert "美食" in resp.json()
 
+    def test_help_page_and_shared_tokens(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        client = TestClient(app)
+        page = client.get("/help")
+        assert page.status_code == 200
+        assert "判定四态" in page.text
+        tokens = client.get("/static/tokens.css")
+        assert tokens.status_code == 200
+        assert "--canvas" in tokens.text
+
     def test_missing_api_key(self):
         from fastapi.testclient import TestClient
         from app.main import app
