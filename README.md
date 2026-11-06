@@ -90,6 +90,7 @@ HTTPS_PROXY=http://127.0.0.1:10809
 | 端点 | 方法 | 主要参数 | 说明 |
 |------|------|----------|------|
 | `/` | GET | - | 主页面 |
+| `/help` | GET | - | 使用说明页（判定规则、配额、入口说明） |
 | `/health` | GET | - | 健康检查（含 Key 是否配置、数据库路径） |
 | `/api/trends/search` | GET | `keywords`(逗号分隔), `max_results`(1-50), `order`, `time_range` | 关键词搜索 |
 | `/api/trends/shorts/search` | GET | 同上 | 仅 Shorts（≤180 秒） |
