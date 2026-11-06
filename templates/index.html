@@ -58,6 +58,7 @@
             .chart-section, .deep-grid { grid-template-columns: 1fr; }
             .tabs { overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
             .tab { flex: 0 0 auto; white-space: nowrap; }
+            .tab-group-label { position: sticky; left: 0; z-index: 1; align-self: flex-start; background: var(--surface); padding-right: 8px; }
             .form-row { flex-direction: column; }
             .input-group { min-width: 0; }
             .container { padding: 12px; }
@@ -345,6 +346,26 @@
                 el.value = p.get(el.id);
             });
         }
+        const ENTER_ACTIONS = {
+            'keywords': () => guard(searchTrends, '正在搜索视频'),
+            'compare-keyword': () => guard(compareSearches, '正在对比两组关键词'),
+            'channel-input': () => guard(searchChannel, '正在分析频道'),
+            'channel-search-input': () => guard(searchChannels, '正在搜索频道'),
+            'batch-keywords': () => guard(batchScan, '正在批量扫描关键词'),
+            'feature-keyword': () => guard(analyzeFeatures, '正在分析标题特征'),
+            'deep-keyword': () => guard(analyzeShortsDetailed, '正在做深度分析'),
+            'channel-insights-id': () => guard(getChannelInsights, '正在分析频道 Shorts'),
+            'trend-keyword': () => guard(trackTrend, '正在读取趋势'),
+            'discover-seed': () => guard(discoverKeywords, '正在挖掘候选词，约 10 秒'),
+            'leaderboard-keyword': () => guard(loadChannelLeaderboard, '正在统计频道分布')
+        };
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return;
+            const action = ENTER_ACTIONS[e.target.id];
+            if (!action) return;
+            e.preventDefault();
+            action();
+        });
         function setCurrent(data) { currentData = data; document.getElementById('toolbar')?.classList.remove('hidden'); }
         function copyResults() { if (!currentData) { showError('暂无结果'); return; } navigator.clipboard.writeText(JSON.stringify(currentData,null,2)).then(()=>showNotice('已复制到剪贴板')); }
         function exportJSON() {if (!currentData) return;const b = new Blob([JSON.stringify(currentData,null,2)],{type:'application/json'}), u = URL.createObjectURL(b);const a = document.createElement('a'); a.href=u; a.download=`yt-analysis-${Date.now()}.json`; a.click(); URL.revokeObjectURL(u);
