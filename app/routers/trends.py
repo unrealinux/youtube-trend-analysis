@@ -4,18 +4,19 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.config import HOT_CATEGORIES
 from app.models import (
     TrendData, ShortsData, ComparisonResult, BatchScanResult,
     HotCategoryResult, FeatureAnalysisResult, ShortsDetailedResult,
     ChannelInsightsResult, TrendTrackingResult, ChannelSearchResult,
-    DiscoveryResult, ChannelLeaderboardResult,
+    DiscoveryResult, ChannelLeaderboardResult, KeywordResult,
 )
 from app.services import (
     search_trends_service, search_shorts_service, batch_scan_service,
     hot_categories_service, feature_analysis_service, detailed_shorts_service,
     channel_insights_service, compare_searches_service, trend_tracking_service,
     search_channels_service, channel_trends_service, discover_keywords_service,
-    channel_leaderboard_service,
+    channel_leaderboard_service, scan_keyword_service, scan_category_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,47 @@ async def batch_scan(
     except Exception as e:
         logger.error(f"Batch scan error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/trends/scan-one", response_model=KeywordResult)
+async def scan_one(
+    keyword: str = Query(..., description="One keyword to scan"),
+    time_range: str = Query(default="this_month"),
+    max_results: int = Query(default=20, ge=1, le=50),
+):
+    if not keyword:
+        raise HTTPException(status_code=400, detail="Keyword is required")
+    try:
+        result = await scan_keyword_service(keyword, time_range, max_results)
+        return result.model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Scan-one error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/trends/hot-category", response_model=HotCategoryResult)
+async def hot_category(
+    category: str = Query(..., description="One hot category to scan"),
+    time_range: str = Query(default="this_month"),
+    max_results: int = Query(default=10, ge=1, le=30),
+):
+    if not category:
+        raise HTTPException(status_code=400, detail="Category is required")
+    try:
+        result = await scan_category_service(category, time_range, max_results)
+        return result.model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Hot-category error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/trends/hot-categories/list", response_model=List[str])
+async def hot_category_list():
+    return HOT_CATEGORIES
 
 
 @router.get("/trends/hot-categories", response_model=List[HotCategoryResult])

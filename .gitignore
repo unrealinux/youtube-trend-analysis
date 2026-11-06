@@ -7,3 +7,6 @@ __pycache__/
 server.log
 .omp*
 .agents/
+
+# impeccable 本地审查输出
+.impeccable/

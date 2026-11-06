@@ -97,6 +97,9 @@ HTTPS_PROXY=http://127.0.0.1:10809
 | `/api/compare` | POST | JSON: `{"query1": "...", "query2": "...", "time_range": "past_year"}` | 两组关键词对比 |
 | `/api/trends/batch-scan` | GET | `keywords`, `max_results`, `time_range` | 多关键词并发扫描 |
 | `/api/trends/hot-categories` | GET | `time_range`, `max_results`(1-30) | 热门类别扫描 |
+| `/api/trends/hot-categories/list` | GET | - | 预置类别列表（不耗配额） |
+| `/api/trends/hot-category` | GET | `category`, `time_range`, `max_results` | 单类别扫描（前端逐条进度用） |
+| `/api/trends/scan-one` | GET | `keyword`, `time_range`, `max_results` | 单关键词扫描（同上） |
 | `/api/trends/feature-analysis` | GET | `keyword`, `max_results`, `time_range` | 特征分析 |
 | `/api/shorts/detailed` | GET | `keyword`, `max_results`, `time_range` | 深度 Shorts 分析 |
 | `/api/shorts/channel-insights` | GET | `channel_id`, `max_results`, `time_range` | 频道 Shorts 洞察 |

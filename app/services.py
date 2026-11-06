@@ -810,8 +810,44 @@ async def discover_keywords_service(seed: str, limit: int, scan: bool, time_rang
     )
 
 
-async def hot_categories_service(time_range: str, max_results: int) -> List[HotCategoryResult]:
+async def scan_keyword_service(keyword: str, time_range: str, max_results: int = 20) -> KeywordResult:
+    """One keyword's Shorts metrics, so a client can show per-item progress."""
     days = _resolve_days(time_range)
+    if not config.YOUTUBE_API_KEY:
+        raise HTTPException(status_code=503, detail="YouTube API Key not configured")
+    metrics = await _scan_keyword_metrics(keyword, days, max_results)
+    if metrics is None:
+        raise HTTPException(status_code=404, detail=f"No Shorts found for '{keyword}'")
+    return metrics
+
+
+async def scan_category_service(category: str, time_range: str, max_results: int = 10) -> HotCategoryResult:
+    """One hot category, so a client can sweep the list and show progress."""
+    days = _resolve_days(time_range)
+    if not config.YOUTUBE_API_KEY:
+        raise HTTPException(status_code=503, detail="YouTube API Key not configured")
+    vids, all_tags, _ = await _collect_shorts(
+        config.YOUTUBE_API_KEY, category + " #shorts", max_results, days
+    )
+    if not vids:
+        raise HTTPException(status_code=404, detail=f"No Shorts found for '{category}'")
+    total_views = sum(v.view_count for v in vids)
+    total_likes = sum(v.like_count for v in vids)
+    total_comments = sum(v.comment_count for v in vids)
+    engagement_rate = (total_likes + total_comments) / max(total_views, 1) * 100
+    return HotCategoryResult(
+        category=category,
+        avg_views=round(total_views / len(vids), 2),
+        total_views=total_views,
+        video_count=len(vids),
+        engagement_rate=round(engagement_rate, 2),
+        top_video_views=max(v.view_count for v in vids),
+        top_keywords=[kw for kw, _ in Counter(all_tags).most_common(8)],
+    )
+
+
+async def hot_categories_service(time_range: str, max_results: int) -> List[HotCategoryResult]:
+    _resolve_days(time_range)  # reject a bad range before the key check
     if not config.YOUTUBE_API_KEY:
         raise HTTPException(status_code=503, detail="YouTube API Key not configured")
 
@@ -820,25 +856,7 @@ async def hot_categories_service(time_range: str, max_results: int) -> List[HotC
     async def scan_category(category: str) -> Optional[HotCategoryResult]:
         try:
             async with sem:
-                vids, all_tags, _ = await _collect_shorts(
-                    config.YOUTUBE_API_KEY, category + " #shorts", max_results, days
-                )
-            if not vids:
-                return None
-            total_views = sum(v.view_count for v in vids)
-            top_views = max(v.view_count for v in vids)
-            total_likes = sum(v.like_count for v in vids)
-            total_comments = sum(v.comment_count for v in vids)
-            engagement_rate = (total_likes + total_comments) / max(total_views, 1) * 100
-            return HotCategoryResult(
-                category=category,
-                avg_views=round(total_views / len(vids), 2),
-                total_views=total_views,
-                video_count=len(vids),
-                engagement_rate=round(engagement_rate, 2),
-                top_video_views=top_views,
-                top_keywords=[kw for kw, _ in Counter(all_tags).most_common(8)]
-            )
+                return await scan_category_service(category, time_range, max_results)
         except Exception as e:
             logger.error(f"Error scanning category '{category}': {e}")
             return None

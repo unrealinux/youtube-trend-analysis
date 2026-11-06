@@ -895,6 +895,29 @@ def test_scan_metrics_reports_top_video_share(monkeypatch):
     assert m.top_share == 0.8
 
 
+def test_scan_keyword_service_returns_one_row(monkeypatch):
+    """Per-keyword endpoint: one call, one result, so the UI can count progress."""
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP([short("a", 1000)]))
+    m = run(services.scan_keyword_service("kw", "this_month"))
+    assert m.keyword == "kw"
+    assert m.avg_views == 1000
+
+
+def test_scan_keyword_service_404_when_empty(monkeypatch):
+    from fastapi import HTTPException
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP([]))
+    with pytest.raises(HTTPException) as exc:
+        run(services.scan_keyword_service("kw", "this_month"))
+    assert exc.value.status_code == 404
+
+
+def test_scan_category_service_returns_one_row(monkeypatch):
+    monkeypatch.setattr(services, "fetch_json", FakeHTTP([short("a", 500)]))
+    r = run(services.scan_category_service("美食", "this_month"))
+    assert r.category == "美食"
+    assert r.avg_views == 500
+
+
 def test_make_video_info_keeps_channel_id():
     v = services._make_video_info(short("x", 10, channel="MyCh"))
     assert v.channel_id == "UC-MyCh"

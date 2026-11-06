@@ -113,6 +113,13 @@ class TestFastAPIEndpoints:
         assert client.get("/api/history").status_code == 200
         assert client.delete("/api/history").status_code == 200
 
+    def test_hot_category_list_needs_no_quota(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        resp = TestClient(app).get("/api/trends/hot-categories/list")
+        assert resp.status_code == 200
+        assert "美食" in resp.json()
+
     def test_missing_api_key(self):
         from fastapi.testclient import TestClient
         from app.main import app
